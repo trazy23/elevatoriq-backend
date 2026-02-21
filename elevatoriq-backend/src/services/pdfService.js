@@ -102,178 +102,264 @@ function wrapInHTML(reportBody, reviewType = '') {
 <head>
 <meta charset="UTF-8">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
-
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
-    font-family: 'DM Sans', Helvetica, Arial, sans-serif;
+    font-family: Helvetica, Arial, sans-serif;
     font-size: 10.5pt;
     color: #1a1f2a;
     background: white;
     line-height: 1.65;
   }
 
-  /* ── Header ── */
+  /* ══ COVER HEADER ══ */
   .header {
     background: #0B0E13;
-    padding: 28px 44px;
+    padding: 0;
+  }
+  .header-top {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
+    padding: 22px 44px 18px;
   }
+  .logo-block { display: flex; flex-direction: column; }
   .logo {
-    font-size: 22pt;
-    font-weight: 700;
+    font-size: 26pt;
+    font-weight: 800;
     color: white;
-    letter-spacing: -0.5px;
+    letter-spacing: -1px;
+    line-height: 1;
   }
   .logo span { color: #00B876; }
-  .header-meta {
-    text-align: right;
-    color: #9AA0AE;
-    font-size: 9pt;
-    line-height: 1.7;
+  .logo-tagline {
+    font-size: 8.5pt;
+    color: #6B7280;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-top: 4px;
+    font-weight: 400;
   }
-  .header-meta strong {
+  .header-badge {
+    background: rgba(0,184,118,0.12);
+    border: 1px solid rgba(0,184,118,0.3);
+    border-radius: 6px;
+    padding: 10px 18px;
+    text-align: right;
+  }
+  .header-badge .report-type {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #00B876;
+    letter-spacing: 0.02em;
     display: block;
-    color: #E8EAF0;
-    font-size: 10.5pt;
-    font-weight: 600;
-    margin-bottom: 4px;
+  }
+  .header-badge .report-date {
+    font-size: 8.5pt;
+    color: #9AA0AE;
+    margin-top: 3px;
+    display: block;
+  }
+  .header-strip {
+    background: #00B876;
+    height: 3px;
+  }
+  .header-sub {
+    background: #131720;
+    padding: 10px 44px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .trust-pills { display: flex; gap: 18px; }
+  .trust-pill {
+    font-size: 8pt;
+    color: #6B7280;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .trust-pill::before {
+    content: '✓ ';
+    color: #00B876;
+    font-weight: 700;
+  }
+  .powered-by {
+    font-size: 7.5pt;
+    color: #4B5563;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
 
-  /* ── Content ── */
+  /* ══ CONTENT ══ */
   .content {
     padding: 36px 48px 48px;
     max-width: 780px;
     margin: 0 auto;
   }
 
-  p {
-    margin: 7px 0;
-    color: #2d3340;
-  }
+  p { margin: 7px 0; color: #2d3340; }
 
   h2.section-title {
-    font-size: 13pt;
+    font-size: 12.5pt;
     font-weight: 700;
     color: #0B0E13;
-    letter-spacing: -0.3px;
-    margin: 28px 0 10px 0;
-    padding-bottom: 7px;
-    border-bottom: 2px solid #00B876;
+    letter-spacing: -0.2px;
+    margin: 30px 0 10px 0;
+    padding: 8px 12px 8px 14px;
+    background: #f4f6f9;
+    border-left: 4px solid #00B876;
+    border-radius: 0 4px 4px 0;
   }
 
   h3.sub-heading {
-    font-size: 10pt;
-    font-weight: 600;
+    font-size: 9.5pt;
+    font-weight: 700;
     color: #3E4452;
     margin: 18px 0 6px 0;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
   }
 
   hr.section-rule {
     border: none;
     border-top: 1px solid #E8EAF0;
-    margin: 6px 0;
+    margin: 4px 0;
   }
 
-  ul {
-    padding-left: 20px;
-    margin: 8px 0 8px 0;
-  }
-  li {
-    margin: 4px 0;
-    color: #2d3340;
-  }
+  ul { padding-left: 20px; margin: 8px 0; }
+  li { margin: 4px 0; color: #2d3340; }
 
   .spacer { height: 6px; }
 
-  /* ── Risk blocks ── */
+  /* ══ RISK BLOCKS ══ */
   .risk-block {
-    border-left: 3px solid;
-    padding: 10px 14px;
+    border-left: 4px solid;
+    padding: 11px 16px;
     margin: 12px 0;
     border-radius: 0 6px 6px 0;
     page-break-inside: avoid;
   }
-  .risk-high {
-    border-color: #E85D5D;
-    background: #fff5f5;
-  }
-  .risk-medium {
-    border-color: #E8A840;
-    background: #fffbf0;
-  }
-  .risk-low {
-    border-color: #9AA0AE;
-    background: #f8f9fa;
-  }
+  .risk-high   { border-color: #DC2626; background: #fef2f2; }
+  .risk-medium { border-color: #D97706; background: #fffbeb; }
+  .risk-low    { border-color: #6B7280; background: #f9fafb; }
+
   .risk-badge {
     display: inline-block;
-    font-family: 'DM Mono', monospace;
-    font-size: 8.5pt;
-    font-weight: 500;
-    padding: 1px 7px;
+    font-size: 7.5pt;
+    font-weight: 700;
+    padding: 2px 8px;
     border-radius: 3px;
-    margin-right: 6px;
+    margin-right: 7px;
     color: white;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
-  .risk-high .risk-badge { background: #E85D5D; }
-  .risk-medium .risk-badge { background: #E8A840; }
-  .risk-low .risk-badge { background: #9AA0AE; }
+  .risk-high   .risk-badge { background: #DC2626; }
+  .risk-medium .risk-badge { background: #D97706; }
+  .risk-low    .risk-badge { background: #6B7280; }
 
-  /* ── Sub-labels ── */
+  /* ══ SUB-LABELS ══ */
   .sub-label {
-    margin: 4px 0 4px 14px;
-    color: #3E4452;
+    margin: 4px 0 4px 16px;
+    color: #4B5563;
     font-size: 10pt;
   }
-  .sub-label strong {
-    color: #0B0E13;
-  }
+  .sub-label strong { color: #111827; }
 
-  /* ── Footer ── */
+  /* ══ FOOTER ══ */
   .footer {
-    margin-top: 40px;
-    padding: 16px 48px;
-    border-top: 1px solid #E8EAF0;
+    background: #0B0E13;
+    margin-top: 48px;
+    padding: 20px 44px;
     display: flex;
     justify-content: space-between;
+    align-items: center;
+  }
+  .footer-left { display: flex; flex-direction: column; gap: 3px; }
+  .footer-logo {
+    font-size: 13pt;
+    font-weight: 800;
+    color: white;
+    letter-spacing: -0.5px;
+  }
+  .footer-logo span { color: #00B876; }
+  .footer-tagline {
     font-size: 8pt;
-    color: #9AA0AE;
+    color: #4B5563;
+    letter-spacing: 0.06em;
+    font-style: italic;
+  }
+  .footer-right {
+    text-align: right;
+    font-size: 7.5pt;
+    color: #4B5563;
+    line-height: 1.8;
+  }
+  .footer-disclaimer {
+    font-size: 7pt;
+    color: #374151;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #1F2937;
+    text-align: center;
   }
 
-  /* ── Print ── */
+  /* ══ PRINT ══ */
   @media print {
-    .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .risk-block { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    h2.section-title { page-break-after: avoid; }
-    .risk-block { page-break-inside: avoid; }
+    .header       { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .header-strip { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .header-sub   { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .risk-block   { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .footer       { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    h2.section-title { page-break-after: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 </style>
 </head>
 <body>
 
+<!-- ══ HEADER ══ -->
 <div class="header">
-  <div class="logo">Elevator<span>IQ</span></div>
-  <div class="header-meta">
-    <strong>${escapeHtml(label)}</strong>
-    ${escapeHtml(date)}<br/>
-    Secure · Confidential · No vendor affiliations<br/>
-    Generated by ElevatorIQ domain logic v1.1
+  <div class="header-top">
+    <div class="logo-block">
+      <div class="logo">Elevator<span>IQ</span></div>
+      <div class="logo-tagline">Structured intelligence, not guesswork.</div>
+    </div>
+    <div class="header-badge">
+      <span class="report-type">${escapeHtml(label)}</span>
+      <span class="report-date">${escapeHtml(date)}</span>
+    </div>
+  </div>
+  <div class="header-strip"></div>
+  <div class="header-sub">
+    <div class="trust-pills">
+      <span class="trust-pill">Independent</span>
+      <span class="trust-pill">Confidential</span>
+      <span class="trust-pill">No Vendor Affiliations</span>
+    </div>
+    <div class="powered-by">ElevatorIQ Domain Logic v1.1</div>
   </div>
 </div>
 
+<!-- ══ BODY ══ -->
 <div class="content">
   ${bodyHtml}
 </div>
 
+<!-- ══ FOOTER ══ -->
 <div class="footer">
-  <span>ElevatorIQ — Independent Elevator Intelligence</span>
-  <span>This analysis is for decision support only. Verify all figures before contract execution.</span>
+  <div class="footer-left">
+    <div class="footer-logo">Elevator<span>IQ</span></div>
+    <div class="footer-tagline">"Upload. Analyze. Decide."</div>
+  </div>
+  <div class="footer-right">
+    elevatoriq.ai<br/>
+    Independent Elevator Intelligence<br/>
+    Secure · Confidential · No Vendor Affiliations
+  </div>
+</div>
+<div class="footer-disclaimer">
+  This report is generated for decision-support purposes only. All findings should be verified against original contract documents before execution.
+  ElevatorIQ is an independent platform with no affiliation to any elevator manufacturer, contractor, or service provider.
 </div>
 
 </body>
