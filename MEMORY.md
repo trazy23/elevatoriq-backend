@@ -54,6 +54,12 @@ AI-powered elevator procurement intelligence platform. Users upload elevator inv
 3. Refine Rulebook for better analysis output
 4. Add report_body DB caching (skip re-running Claude for PDF regeneration)
 
+## Trey's Setup
+- **Calendars:** Google + Apple + Outlook, all synced to iCal on Mac
+- **Calendar access:** Need `brew install ical-buddy` — not yet installed. Once done, I can read full schedule across all three.
+- **Email delivery preference:** trenaryl.zackery@gmail.com for all deliverables
+- **Kirsten email (pending):** Trey wants to set up a dedicated email for Kirsten that both can monitor. Options discussed: kirsten@elevatoriq.ai (Resend + Cloudflare forwarding) or shared Gmail. Leaning toward Option 3 (both). Not yet set up.
+
 ## Key Infra
 - DB: `postgresql://localhost:5432/elevatoriq_dev`
 - R2 endpoint: `https://8d019a2f5e3aaeba152a925ccf74527a.r2.cloudflarestorage.com`
