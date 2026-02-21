@@ -239,14 +239,23 @@ function initQueue() {
 
 async function addJob(caseId) {
   if (queue) {
-    await queue.add({ caseId }, { attempts: 2, backoff: 5000 });
-  } else {
-    // Fallback: process directly (synchronous, fine for local dev without Redis)
-    setImmediate(() => processCase(caseId));
+    try {
+      await queue.add({ caseId }, { attempts: 2, backoff: 5000 });
+      return;
+    } catch (err) {
+      console.warn('[Worker] Bull queue unavailable, falling back to direct processing:', err.message);
+      queue = null; // disable queue for future calls
+    }
   }
+  // Fallback: process directly (fine for local dev without Redis)
+  setImmediate(() => processCase(caseId));
 }
 
-// Initialize queue on import
-initQueue();
+// Only initialize Bull queue if REDIS_ENABLED is explicitly set
+if (process.env.REDIS_ENABLED === 'true') {
+  initQueue();
+} else {
+  console.log('[Worker] Redis disabled — using direct processing (set REDIS_ENABLED=true to enable queue)');
+}
 
 module.exports = { addJob, processCase };
