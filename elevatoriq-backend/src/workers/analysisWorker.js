@@ -186,13 +186,13 @@ async function processCase(caseId) {
       await saveExtraction(caseId, analysisResult);
     }
 
-    // 7. Generate PDF
-    const { key: pdfKey, buffer: pdfBuffer } = await pdfService.generateAndUploadPDF(
-      analysisResult.reportBody, caseId, caseRow.review_type
-    );
-
-    // 8. Save report record with download token
+    // 7. Generate download token first (so QR code can embed the link)
     const token = uuidv4();
+
+    // 8. Generate PDF with QR code pointing to the download URL
+    const { key: pdfKey, buffer: pdfBuffer } = await pdfService.generateAndUploadPDF(
+      analysisResult.reportBody, caseId, caseRow.review_type, token
+    );
     await db.query(
       `INSERT INTO reports (case_id, storage_path, download_token) VALUES ($1,$2,$3)`,
       [caseId, pdfKey, token]
