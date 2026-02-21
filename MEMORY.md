@@ -12,6 +12,7 @@
 - **ElevatorIQ origin:** Came from lived consulting experience — saw the information asymmetry customers faced and wanted to solve it at scale, affordably.
 
 ## Project: ElevatorIQ (elevatoriq.ai)
+**Nights and weekends bet** — Trey's own bootstrapped project, separate from his day job.
 AI-powered elevator procurement intelligence platform. Users upload elevator invoices, bids, and modernization proposals → Claude analyzes via Rulebook → structured PDF report delivered by email.
 
 **Three analysis modules:**
@@ -33,6 +34,7 @@ AI-powered elevator procurement intelligence platform. Users upload elevator inv
 - Play: auditable MBE diverse spend for GCs and corporations across four trades under one platform
 - Certified by NMSDC. CEO: Larry Brinker Jr.
 - Trey is building this from scratch — will work on this together (separate from ElevatorIQ)
+- **This is his day job** — daytime sessions are likely Brinker Supply focused
 
 ## Next Steps (ElevatorIQ)
 1. Deploy to Railway or Render
