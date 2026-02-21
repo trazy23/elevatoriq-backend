@@ -1,5 +1,10 @@
 # MEMORY.md — Long-term Context
 
+## Corporate Structure
+- **Lightward Ventures LLC** — holding company being created and filed ASAP
+- All ventures (ElevatorIQ, Trill Golf, and personal stake in Brinker Supply) will fall under Lightward Ventures
+- Purpose: remove Trey personally from liability, clean ownership structure across all businesses
+
 ## Trey's Core Motivation
 - Not chasing money — chasing freedom FROM money as a constraint in decisions
 - Believes in God and manifestation. Speaks outcomes into existence.
