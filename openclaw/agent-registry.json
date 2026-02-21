@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "updated": "2026-02-21T21:12:31.556Z",
+  "updated": "2026-02-21T21:30:05.800Z",
   "owner": "Trey Zackery",
   "agents": [
     {
@@ -45,7 +45,7 @@
       "emoji": "🔨",
       "role": "Developer / Coder / Deployer",
       "model": "claude-sonnet-4-6",
-      "model_api": "anthropic",
+      "model_api": "anthropic_builder",
       "memory_key": "builder_context",
       "can_call": [
         "researcher",
@@ -77,8 +77,8 @@
       "name": "Researcher",
       "emoji": "🔬",
       "role": "Web Intel / Document Analysis",
-      "model": "claude-sonnet-4-6",
-      "model_api": "anthropic",
+      "model": "gemini-2.0-flash",
+      "model_api": "gemini",
       "memory_key": "researcher_context",
       "can_call": [],
       "requires_kirsten_for": [
@@ -106,8 +106,8 @@
       "name": "PM · ElevatorIQ",
       "emoji": "📈",
       "role": "Project Manager — ElevatorIQ",
-      "model": "claude-sonnet-4-6",
-      "model_api": "anthropic",
+      "model": "llama3.3:latest",
+      "model_api": "ollama",
       "memory_key": "pm_elevatoriq_context",
       "can_call": [
         "researcher",
@@ -139,8 +139,8 @@
       "name": "PM · Brinker Supply",
       "emoji": "🏗️",
       "role": "Project Manager — Brinker Supply",
-      "model": "claude-sonnet-4-6",
-      "model_api": "anthropic",
+      "model": "llama3.3:latest",
+      "model_api": "ollama",
       "memory_key": "pm_brinker_context",
       "can_call": [
         "researcher",
@@ -170,8 +170,8 @@
       "name": "Tasks",
       "emoji": "✅",
       "role": "Capture / Triage / Track",
-      "model": "claude-haiku-4-5",
-      "model_api": "anthropic",
+      "model": "llama3.2:3b",
+      "model_api": "ollama",
       "memory_key": "tasks_master",
       "can_call": [
         "pm_elevatoriq",
@@ -200,8 +200,8 @@
       "name": "Marketing",
       "emoji": "📣",
       "role": "Content / Outreach / Campaigns",
-      "model": "claude-sonnet-4-6",
-      "model_api": "anthropic",
+      "model": "gemini-2.0-pro-exp",
+      "model_api": "gemini",
       "memory_key": "marketing_context",
       "can_call": [
         "researcher",
@@ -231,8 +231,8 @@
       "name": "Designer",
       "emoji": "🎨",
       "role": "Visuals / UI / Brand Assets",
-      "model": "dall-e-3",
-      "model_api": "openai",
+      "model": "imagen-3.0-generate-002",
+      "model_api": "gemini_image",
       "memory_key": "designer_context",
       "can_call": [
         "researcher",
@@ -261,8 +261,8 @@
       "name": "Security",
       "emoji": "🛡️",
       "role": "Audits / Access / Hygiene",
-      "model": "claude-sonnet-4-6",
-      "model_api": "anthropic",
+      "model": "qwen2.5:7b",
+      "model_api": "ollama",
       "memory_key": "security_context",
       "can_call": [
         "builder"
@@ -291,8 +291,8 @@
       "name": "Family Manager",
       "emoji": "🏠",
       "role": "Personal Ops / Schedules",
-      "model": "claude-haiku-4-5",
-      "model_api": "anthropic",
+      "model": "qwen2.5:7b",
+      "model_api": "ollama",
       "memory_key": "family_context",
       "can_call": [
         "tasks"

@@ -8,6 +8,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { v4 as uuidv4 } from 'uuid';
+import { execSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -22,7 +23,26 @@ const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   : null;
 
+// ─── Shell Exec (for Builder agentic loop) ────────────────────────────────────
+
+function safeExec(command, timeoutMs = 30000) {
+  try {
+    const output = execSync(command, {
+      timeout: timeoutMs,
+      encoding: 'utf8',
+      cwd: process.env.WORKSPACE || process.env.HOME,
+      env: { ...process.env, PATH: process.env.PATH },
+    });
+    return { success: true, output: output.substring(0, 3000) };
+  } catch (err) {
+    return { success: false, output: (err.stdout || '') + (err.stderr || ''), error: err.message };
+  }
+}
+
+// ─── Model Clients ─────────────────────────────────────────────────────────────
+
 const MODEL_CLIENTS = {
+  // Anthropic — Claude Sonnet / Haiku
   anthropic: async ({ model, systemPrompt, userMessage, maxTokens = 4096 }) => {
     const response = await anthropic.messages.create({
       model,
@@ -33,25 +53,131 @@ const MODEL_CLIENTS = {
     return response.content[0].text;
   },
 
-  openai: async ({ model, systemPrompt, userMessage }) => {
-    if (!openai) throw new Error('OpenAI API key not configured — Designer agent unavailable');
-    if (model === 'dall-e-3') {
-      // For designer, the userMessage IS the image prompt
-      const response = await openai.images.generate({
-        model: 'dall-e-3',
-        prompt: userMessage,
-        n: 1,
-        size: '1024x1024',
-        quality: 'standard',
+  // Anthropic (Builder) — Agentic loop with exec capability
+  anthropic_builder: async ({ model, systemPrompt, userMessage, maxTokens = 8096 }) => {
+    const messages = [{ role: 'user', content: userMessage }];
+    const builderSystem = `${systemPrompt}
+
+EXECUTION CAPABILITY: You can run shell commands by including blocks in your response formatted as:
+<exec>command here</exec>
+
+When you include an exec block, the command will be run and output returned to you so you can iterate.
+Use this to: write files, run tests, install packages, verify your code works.
+Max 8 exec calls per task. Always verify code runs before declaring success.`;
+
+    let finalResult = '';
+    let execCount = 0;
+
+    // Agentic loop — up to 8 iterations
+    while (execCount < 8) {
+      const response = await anthropic.messages.create({
+        model,
+        max_tokens: maxTokens,
+        system: builderSystem,
+        messages,
       });
-      return JSON.stringify({ image_url: response.data[0].url, revised_prompt: response.data[0].revised_prompt });
+
+      const text = response.content[0].text;
+      messages.push({ role: 'assistant', content: text });
+
+      // Check for exec blocks
+      const execMatch = text.match(/<exec>([\s\S]*?)<\/exec>/);
+      if (!execMatch || response.stop_reason === 'end_turn' && !execMatch) {
+        finalResult = text;
+        break;
+      }
+
+      if (execMatch) {
+        execCount++;
+        const cmd = execMatch[1].trim();
+        console.log(`[Builder] Executing (${execCount}/8): ${cmd.substring(0, 80)}`);
+        const result = safeExec(cmd);
+        const execOutput = result.success
+          ? `<exec_result success="true">${result.output}</exec_result>`
+          : `<exec_result success="false" error="${result.error}">${result.output}</exec_result>`;
+        messages.push({ role: 'user', content: execOutput });
+        finalResult = text.replace(/<exec>[\s\S]*?<\/exec>/g, '').trim();
+      } else {
+        finalResult = text;
+        break;
+      }
     }
-    const response = await openai.chat.completions.create({
+
+    return finalResult;
+  },
+
+  // Ollama — local models (OpenAI-compatible API)
+  ollama: async ({ model, systemPrompt, userMessage, maxTokens = 4096 }) => {
+    const ollamaClient = new OpenAI({
+      baseURL: 'http://localhost:11434/v1',
+      apiKey: 'ollama', // required by client but not used
+    });
+    const response = await ollamaClient.chat.completions.create({
       model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage },
       ],
+      max_tokens: maxTokens,
+    });
+    return response.choices[0].message.content;
+  },
+
+  // Gemini — via Google AI API (OpenAI-compatible endpoint)
+  gemini: async ({ model, systemPrompt, userMessage, maxTokens = 4096 }) => {
+    if (!process.env.GOOGLE_AI_API_KEY) {
+      throw new Error('GOOGLE_AI_API_KEY not configured — Gemini agents unavailable');
+    }
+    const geminiClient = new OpenAI({
+      baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+      apiKey: process.env.GOOGLE_AI_API_KEY,
+    });
+    const response = await geminiClient.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+      max_tokens: maxTokens,
+    });
+    return response.choices[0].message.content;
+  },
+
+  // Gemini Image Generation (Imagen 3)
+  gemini_image: async ({ userMessage }) => {
+    if (!process.env.GOOGLE_AI_API_KEY) {
+      throw new Error('GOOGLE_AI_API_KEY not configured — Designer agent unavailable');
+    }
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${process.env.GOOGLE_AI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instances: [{ prompt: userMessage }],
+          parameters: { sampleCount: 1 },
+        }),
+      }
+    );
+    const data = await response.json();
+    if (data.predictions?.[0]?.bytesBase64Encoded) {
+      return JSON.stringify({ image_base64: data.predictions[0].bytesBase64Encoded, mimeType: 'image/png' });
+    }
+    throw new Error('Imagen 3 returned no image: ' + JSON.stringify(data));
+  },
+
+  // OpenAI (fallback for DALL-E if needed)
+  openai: async ({ model, systemPrompt, userMessage }) => {
+    if (!openai) throw new Error('OpenAI API key not configured');
+    if (model === 'dall-e-3') {
+      const response = await openai.images.generate({
+        model: 'dall-e-3', prompt: userMessage, n: 1, size: '1024x1024', quality: 'standard',
+      });
+      return JSON.stringify({ image_url: response.data[0].url, revised_prompt: response.data[0].revised_prompt });
+    }
+    const response = await openai.chat.completions.create({
+      model,
+      messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userMessage }],
     });
     return response.choices[0].message.content;
   },
