@@ -20,7 +20,7 @@
 - **Background:** 16 years in elevator industry; 5 of those owning Corporate Elevator Asset Management (elevator consulting agency)
 - **Self-described:** Serial entrepreneur. Believes ElevatorIQ is his golden idea.
 - **Not a developer.** Works with part-time dev (Landen) and AI agents.
-- **Test email:** trenaryl.zackery@gmail.com
+- **Email (primary delivery):** trenaryl.zackery@gmail.com — preferred method for receiving docs, briefs, and deliverables going forward
 - **ElevatorIQ origin:** Came from lived consulting experience — saw the information asymmetry customers faced and wanted to solve it at scale, affordably.
 
 ## Project: ElevatorIQ (elevatoriq.ai)
