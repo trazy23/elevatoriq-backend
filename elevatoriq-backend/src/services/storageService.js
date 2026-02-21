@@ -3,8 +3,10 @@ const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const path = require('path');
 require('dotenv').config();
 
+// Cloudflare R2 uses S3-compatible API with a jurisdiction-specific endpoint
 const s3 = new S3Client({
-  region: process.env.AWS_REGION,
+  region: process.env.AWS_REGION || 'auto',
+  endpoint: process.env.R2_ENDPOINT, // Required for Cloudflare R2
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
