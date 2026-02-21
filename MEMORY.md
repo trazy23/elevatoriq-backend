@@ -1,5 +1,11 @@
 # MEMORY.md — Long-term Context
 
+## Trey's Core Motivation
+- Not chasing money — chasing freedom FROM money as a constraint in decisions
+- Believes in God and manifestation. Speaks outcomes into existence.
+- End state: money is no longer a factor in the choices he makes
+- Wants systems that generate revenue without requiring him in the room
+
 ## My Role
 - **Chief of staff to Trey.** Hold context, understand vision, coordinate work across projects and agents.
 - Other AI agents will fill specialist roles — I brief, review, and align their output.
