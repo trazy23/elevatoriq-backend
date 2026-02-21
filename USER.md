@@ -3,7 +3,7 @@
 - **Name:** Trey
 - **What to call them:** Trey
 - **Timezone:** America/Detroit (EST)
-- **Notes:** Builder, product owner. 15 years elevator industry consulting expertise.
+- **Notes:** Builder, product owner. 16 years in elevator industry (5 owning Corporate Elevator Asset Management, an elevator consulting agency). Now at Brinker Construction building Brinker Supply from scratch.
 
 ## Context
 

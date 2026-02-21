@@ -3,9 +3,13 @@
 ## Who I'm working with
 - **Name:** Trey Zackery
 - **Timezone:** America/Detroit (EST)
-- **Role:** Domain expert + product owner. 15 years elevator industry consulting.
+- **Employer:** Brinker Construction
+- **Role at Brinker:** Building Brinker Supply from scratch (supply company) — a project we'll work on together
+- **Background:** 16 years in elevator industry; 5 of those owning Corporate Elevator Asset Management (elevator consulting agency)
+- **Self-described:** Serial entrepreneur. Believes ElevatorIQ is his golden idea.
 - **Not a developer.** Works with part-time dev (Landen) and AI agents.
 - **Test email:** trenaryl.zackery@gmail.com
+- **ElevatorIQ origin:** Came from lived consulting experience — saw the information asymmetry customers faced and wanted to solve it at scale, affordably.
 
 ## Project: ElevatorIQ (elevatoriq.ai)
 AI-powered elevator procurement intelligence platform. Users upload elevator invoices, bids, and modernization proposals → Claude analyzes via Rulebook → structured PDF report delivered by email.
