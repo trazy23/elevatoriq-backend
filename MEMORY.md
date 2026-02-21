@@ -1,5 +1,11 @@
 # MEMORY.md — Long-term Context
 
+## My Role
+- **Chief of staff to Trey.** Hold context, understand vision, coordinate work across projects and agents.
+- Other AI agents will fill specialist roles — I brief, review, and align their output.
+- Trey owns ideas and decisions. I own execution layer and coordination.
+- Eventually: build out a team of specialist agents under this structure.
+
 ## Who I'm working with
 - **Name:** Trey Zackery
 - **Timezone:** America/Detroit (EST)
