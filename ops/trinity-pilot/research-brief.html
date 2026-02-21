@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; background: #fff; }
+  .cover { background: #1a1a1a; color: white; padding: 48px 48px 36px; }
+  .brand { font-size: 28px; font-weight: 700; color: #00b377; letter-spacing: 1px; }
+  .brand-sub { font-size: 11px; color: #aaa; letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; }
+  .doc-type { font-size: 13px; color: #00b377; margin-top: 28px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+  .doc-title { font-size: 22px; color: #fff; margin-top: 6px; font-weight: 700; line-height: 1.3; }
+  .doc-meta { font-size: 10px; color: #888; margin-top: 16px; }
+  .badges { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+  .badge { border: 1px solid #00b377; color: #00b377; font-size: 8px; padding: 4px 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .body { padding: 32px 48px 32px; }
+  h1 { font-size: 13px; color: #1a1a1a; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid #00b377; padding-bottom: 6px; margin-bottom: 14px; margin-top: 28px; }
+  h2 { font-size: 11px; color: #1a1a1a; font-weight: 700; margin-top: 16px; margin-bottom: 8px; }
+  p { font-size: 10.5px; line-height: 1.7; color: #2a2a2a; margin-bottom: 8px; }
+  ul { margin-left: 18px; margin-bottom: 10px; }
+  li { font-size: 10.5px; line-height: 1.7; color: #2a2a2a; margin-bottom: 3px; }
+  .highlight { background: #f0fdf8; border-left: 3px solid #00b377; padding: 10px 14px; margin: 12px 0; }
+  .highlight p, .highlight ul, .highlight li { margin-bottom: 3px; font-size: 10.5px; }
+  .flag-high { background: #fff5f5; border-left: 3px solid #d32f2f; padding: 10px 14px; margin: 10px 0; }
+  .flag-med { background: #fffbf0; border-left: 3px solid #f59e0b; padding: 10px 14px; margin: 10px 0; }
+  .flag-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+  .flag-high .flag-label { color: #d32f2f; }
+  .flag-med .flag-label { color: #b45309; }
+  .flag-high p, .flag-med p { margin: 0; font-size: 10.5px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10px; }
+  th { background: #1a1a1a; color: #fff; padding: 7px 10px; text-align: left; }
+  td { padding: 7px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+  tr:nth-child(even) td { background: #f9f9f9; }
+  .note { font-size: 9px; color: #777; font-style: italic; margin-top: 4px; }
+  .gap-box { background: #fafafa; border: 1px dashed #ccc; padding: 12px 14px; margin: 12px 0; }
+  .gap-box li { font-size: 10px; color: #666; }
+  .footer-bar { background: #1a1a1a; color: #888; font-size: 9px; padding: 10px 48px; display: flex; justify-content: space-between; margin-top: 20px; }
+  .green { color: #00b377; font-weight: 700; }
+  .section-intro { font-size: 10.5px; color: #555; font-style: italic; margin-bottom: 14px; line-height: 1.6; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px; }
+  hr { border: none; border-top: 1px solid #eee; margin: 20px 0; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="brand">ElevatorIQ</div>
+  <div class="brand-sub">Independent Elevator Intelligence</div>
+  <div class="doc-type">Pre-Meeting Research Brief</div>
+  <div class="doc-title">Trinity Health Oakland Hospital<br>Pilot Account Intelligence</div>
+  <div class="doc-meta">Prepared for: Trey Zackery &nbsp;|&nbsp; Meeting Contact: Rocky Alazazi, Facilities Director &nbsp;|&nbsp; February 2026</div>
+  <div class="badges">
+    <span class="badge">✓ Internal Use Only</span>
+    <span class="badge">✓ Confidential</span>
+    <span class="badge">✓ Pre-Meeting Prep</span>
+  </div>
+</div>
+
+<div class="body">
+
+<h1>1 — Hospital Profile</h1>
+<p class="section-intro">Trinity Health Oakland is one of Oakland County's flagship medical institutions — and a campus currently in the middle of its largest capital expansion in years.</p>
+
+<h2>Facility Snapshot</h2>
+<table>
+  <tr><th>Item</th><th>Detail</th></tr>
+  <tr><td><strong>Legal Name</strong></td><td>Trinity Health Oakland Hospital</td></tr>
+  <tr><td><strong>Former Name</strong></td><td>St. Joseph Mercy Oakland</td></tr>
+  <tr><td><strong>Address</strong></td><td>44405 Woodward Avenue, Pontiac, MI 48341</td></tr>
+  <tr><td><strong>Bed Count</strong></td><td>497 licensed beds</td></tr>
+  <tr><td><strong>Designation</strong></td><td>Level II Trauma Center &amp; Community Teaching Hospital</td></tr>
+  <tr><td><strong>Elevator Portfolio</strong></td><td>30 elevators — mixed makes and vintages</td></tr>
+  <tr><td><strong>Current Service Provider</strong></td><td>Otis Elevator Company (full campus)</td></tr>
+  <tr><td><strong>Campus Layout</strong></td><td>Multi-tower: Surgical Pavilion, South Patient Tower (204 private rooms), Medical Office Building, ancillary buildings. Minimum 8 floors confirmed.</td></tr>
+  <tr><td><strong>Elevator Bank System</strong></td><td>Named bank layout — "D elevators" confirmed in Select Specialty Hospital (Floors 7–8) wayfinding, indicating A–D or similar multi-bank system across towers</td></tr>
+</table>
+
+<h2>Active Capital Project — $48 Million Emergency Department Expansion</h2>
+<div class="highlight">
+  <div class="flag-label green">🔑 Key Context — Use This in the Meeting</div>
+  <p>Trinity Health Oakland broke ground on a <strong>$48 million, four-phase Emergency Department expansion</strong> in summer 2024. Phase 1 completed July 28, 2025. The full project doubles the ED to approximately 50,000 sq ft and is on pace to complete in 2027. Includes additional trauma bays, a dedicated pediatric treatment area, and upgraded nursing stations.</p>
+</div>
+<p><strong>Why it matters for the meeting:</strong> Rocky is managing a major active construction project while overseeing day-to-day operations for 30 elevators. Active construction shifts elevator duty cycles on key banks — more traffic, more wear, more opportunities for Otis to bill callbacks as "out-of-scope." Without an independent baseline, Rocky has limited leverage to dispute those charges. That's the ElevatorIQ value prop in one sentence.</p>
+
+<h2>Trinity Health System Context — The Scale Opportunity</h2>
+<p>Trinity Health is a national multi-institutional Catholic health care delivery system. Trinity Health Michigan encompasses multiple hospital campuses — including Trinity Health Ann Arbor, Trinity Health Livingston, Mercy Health Saint Mary's (Grand Rapids), and others.</p>
+<div class="highlight">
+  <div class="flag-label green">🔑 Scale Opportunity</div>
+  <p>A successful Oakland pilot, with documented findings, gives Rocky a referenceable win he can carry to system-level conversations at Trinity Health Michigan. One FD champion with a real result is the most credible path to multi-campus expansion. The question to explore in the meeting: does Rocky have a peer network across Trinity Health Michigan facilities directors?</p>
+</div>
+
+<h2>Joint Commission &amp; Compliance</h2>
+<p>Trinity Health Oakland holds Joint Commission accreditation. The Joint Commission's Environment of Care standard EC.02.06.01 covers maintenance of equipment — including elevators. In an active construction environment, elevator compliance documentation becomes more complex and higher risk. No public elevator-specific compliance findings were identified.</p>
+<p class="note">Michigan LARA elevator inspection records for this campus are not publicly indexed online. Specific inspection history requires direct LARA inquiry or FOIA.</p>
+
+<hr>
+<h1>2 — Rocky Alazazi — Contact Intelligence</h1>
+<p class="section-intro">Rocky is a credentialed, well-networked healthcare facilities professional who understands how service contractors think — including how they bill.</p>
+
+<h2>Profile Summary</h2>
+<table>
+  <tr><th>Item</th><th>Detail</th></tr>
+  <tr><td><strong>Current Title</strong></td><td>Director, Facilities — Trinity Health Oakland</td></tr>
+  <tr><td><strong>Tenure at Trinity Health</strong></td><td>2023–present (~2 years)</td></tr>
+  <tr><td><strong>Credentials</strong></td><td><strong>LEED AP</strong> — Leadership in Energy &amp; Environmental Design Accredited Professional<br><strong>BCxP</strong> — Building Commissioning Professional<br><strong>CHFM</strong> — Certified Healthcare Facility Manager</td></tr>
+</table>
+
+<h2>Career History</h2>
+<table>
+  <tr><th>Role</th><th>Organization</th><th>What It Tells You</th></tr>
+  <tr><td>Director, Facilities &amp; Engineering</td><td>Crothall Healthcare</td><td>Crothall is a large outsourced FM provider for hospitals. Rocky has seen vendor-managed FM from the inside — he knows how contractors bill and where the gaps are.</td></tr>
+  <tr><td>Vice President</td><td>Quicken Loans / Bedrock Detroit</td><td>Senior leadership over a major commercial real estate portfolio. Comfortable with executive conversations and complex, multi-asset facilities.</td></tr>
+  <tr><td>Site Director</td><td>Beaumont Health</td><td>Direct healthcare facilities experience at one of Michigan's largest health systems.</td></tr>
+</table>
+
+<h2>Professional Community</h2>
+<ul>
+  <li><strong>MiSHE (Michigan Society for Healthcare Engineering):</strong> Active member and event organizer — organized networking events, publicly recognized during Healthcare Facilities Week for "commitment to excellence"</li>
+  <li><strong>ASHE (American Society for Healthcare Engineering):</strong> Attended ASHE Annual 2023; MiSHE won recognition that year</li>
+</ul>
+
+<h2>How to Read Rocky Going In</h2>
+<div class="highlight">
+  <div class="flag-label green">Meeting Intelligence</div>
+  <ul>
+    <li><strong>He's technically credentialed — treat him as a peer.</strong> LEED AP + BCxP + CHFM means he understands building systems deeply. Don't over-explain basics. Lead with findings, not process.</li>
+    <li><strong>He's done vendor-side FM.</strong> Crothall experience means he already knows how service contractors bill. He probably suspects overcharging — he just doesn't have proof. ElevatorIQ gives him the proof.</li>
+    <li><strong>Uptime is his brand.</strong> He was publicly recognized for keeping facilities running "safely, efficiently, and without interruption." Frame ElevatorIQ around protecting uptime and his ability to hold vendors accountable during construction.</li>
+    <li><strong>He's a connector.</strong> He organized the MiSHE event. If he believes in something, he tells his network. A good pilot result travels.</li>
+    <li><strong>Rapport entry:</strong> MiSHE and ASHE. If you know anyone in that circuit, mention it early. Healthcare FM is a small world.</li>
+  </ul>
+</div>
+
+<hr>
+<h1>3 — Otis Contract Intelligence</h1>
+<p class="section-intro">A 30-elevator hospital campus on full-service Otis represents $300,000–$540,000+ in annual maintenance spend — with well-documented overcharge patterns.</p>
+
+<h2>Estimated Annual Spend — 30 Units</h2>
+<table>
+  <tr><th>Scenario</th><th>Per Unit/Month</th><th>Monthly (30 units)</th><th>Annual</th></tr>
+  <tr><td>Conservative (older units, basic service)</td><td>$800</td><td>$24,000</td><td>$288,000</td></tr>
+  <tr><td>Mid-range (mixed vintage, full-service hospital)</td><td>$1,100</td><td>$33,000</td><td>$396,000</td></tr>
+  <tr><td>High (hospital-grade, newer proprietary equipment)</td><td>$1,500+</td><td>$45,000+</td><td>$540,000+</td></tr>
+</table>
+<p class="note">Industry benchmarks based on published procurement data and hospital sector patterns. Trinity Health Oakland-specific rates are not public.</p>
+
+<h2>Where Hospital Accounts Get Overcharged</h2>
+<div class="flag-high">
+  <div class="flag-label">⚠ HIGH — Callback Labor Billed Outside Contract Scope</div>
+  <p>Full-maintenance contracts cover callbacks during normal hours. Otis commonly reclassifies callbacks as "out of scope" by citing operator error, vandalism, or "misuse" — often loosely defined. In a high-traffic hospital, this can represent $10,000–$30,000+ in annual overbilling.</p>
+</div>
+<div class="flag-high">
+  <div class="flag-label">⚠ HIGH — Uncapped Annual Escalation</div>
+  <p>Otis contracts typically include 3–5% annual escalation, often tied to CPI or internal indices. Over 5–7 years without renegotiation, a contract at $1,000/unit can compound to $1,250–$1,400/unit. Many hospital FDs don't track the baseline — they just pay the invoice.</p>
+</div>
+<div class="flag-high">
+  <div class="flag-label">⚠ HIGH — Proprietary Parts Markups</div>
+  <p>Otis uses proprietary controllers on newer installs (Gen2, CompassPlus). Parts are billed at 40–80% above OEM cost. On a mixed-vintage fleet, older units may have non-proprietary components available at market rates — but owners are billed at proprietary pricing regardless.</p>
+</div>
+<div class="flag-high">
+  <div class="flag-label">⚠ HIGH — Construction Period Exposure (Context-Specific)</div>
+  <p>During the active $48M ED expansion, construction traffic increases elevator duty cycles on key banks. Otis will bill wear-related callbacks and component replacements attributable to construction traffic as out-of-scope. Without a pre-construction baseline, there's no documented position to dispute those charges.</p>
+</div>
+<div class="flag-med">
+  <div class="flag-label">▲ MEDIUM — Over-Contracted Units</div>
+  <p>A mixed-vintage 30-unit fleet almost certainly includes elevators that don't need full-maintenance coverage. Older hydraulic units in lower-traffic service roles, MOB elevators, and back-of-house freight lifts may be adequately served by oil &amp; grease or parts &amp; labor contracts at 30–50% lower cost per unit.</p>
+</div>
+
+<hr>
+<h1>4 — Campus Elevator Complexity</h1>
+
+<h2>Estimated Fleet Composition — 30 Units</h2>
+<table>
+  <tr><th>Type</th><th>Est. Count</th><th>Duty Cycle</th><th>Notes</th></tr>
+  <tr><td>Patient / Bed (stretcher-rated)</td><td>8–12</td><td>Very High</td><td>Primary clinical use; highest maintenance intensity; 5,000+ lb capacity; frequent callback activity</td></tr>
+  <tr><td>Visitor / Public Lobby Banks</td><td>6–10</td><td>High</td><td>Named banks (A–D); highest public visibility; subject to peak traffic patterns</td></tr>
+  <tr><td>Service / Freight</td><td>4–6</td><td>Medium-High</td><td>Materials, laundry, food service; often older vintage — strong candidates for contract tier review</td></tr>
+  <tr><td>Medical Office Building</td><td>2–4</td><td>Medium</td><td>Lower duty cycle relative to main towers; potentially over-contracted</td></tr>
+  <tr><td>Ancillary / Back-of-House</td><td>2–4</td><td>Low–Medium</td><td>May include parking structure units; most likely over-contracted</td></tr>
+</table>
+
+<h2>Named Bank System</h2>
+<p>The "D elevator bank" reference in Select Specialty Hospital directions is consistent with a large multi-tower campus that has formally named elevator banks across buildings or wings. In Otis accounts, named bank systems often appear as sub-schedules within a master contract — adding complexity to invoice verification since charges can be assigned to specific banks without clear scope documentation.</p>
+
+<hr>
+<h1>5 — Research Gaps</h1>
+<div class="gap-box">
+  <ul>
+    <li><strong>Rocky's full LinkedIn profile</strong> — LinkedIn blocks automated access. Profile confirmed active via ZoomInfo and public references. Recommend checking manually before the meeting for any recent posts or announcements.</li>
+    <li><strong>Michigan LARA elevator inspection records</strong> — Not publicly indexed. Specific inspection history requires direct LARA inquiry or FOIA. Worth requesting post-pilot if findings warrant it.</li>
+    <li><strong>Otis contract rates (Trinity Health Oakland-specific)</strong> — Specific rates are not public. All figures above are industry benchmarks.</li>
+    <li><strong>Trinity Health system-level facilities structure</strong> — Whether maintenance contracts are negotiated at campus or system level was not confirmed. Ask Rocky directly: "Are elevator contracts managed here or at the system level?"</li>
+  </ul>
+</div>
+
+</div>
+
+<div class="footer-bar">
+  <span>ElevatorIQ — Confidential | Internal Use Only</span>
+  <span>elevatoriq.ai</span>
+  <span>"Upload. Analyze. Decide."</span>
+</div>
+
+</body>
+</html>

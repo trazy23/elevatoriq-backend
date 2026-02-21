@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; background: #fff; }
+  .header { background: #1a1a1a; padding: 28px 48px 22px; }
+  .brand { font-size: 22px; font-weight: 700; color: #00b377; letter-spacing: 1px; }
+  .doc-label { font-size: 10px; color: #00b377; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 14px; font-weight: 600; }
+  .doc-title { font-size: 18px; color: #fff; font-weight: 700; margin-top: 4px; }
+  .doc-meta { font-size: 9.5px; color: #888; margin-top: 10px; }
+  .body { padding: 24px 48px 20px; }
+  .time-block { margin-bottom: 20px; border: 1px solid #e8e8e8; border-radius: 2px; overflow: hidden; }
+  .time-header { background: #1a1a1a; color: #fff; padding: 8px 14px; display: flex; align-items: center; gap: 12px; }
+  .time-badge { background: #00b377; color: #fff; font-size: 9px; font-weight: 700; padding: 3px 8px; border-radius: 10px; white-space: nowrap; }
+  .time-title { font-size: 12px; font-weight: 700; color: #fff; }
+  .time-sub { font-size: 9.5px; color: #aaa; margin-left: auto; }
+  .time-body { padding: 14px 16px; }
+  p { font-size: 10.5px; line-height: 1.7; color: #2a2a2a; margin-bottom: 6px; }
+  ul { margin-left: 18px; margin-bottom: 8px; }
+  li { font-size: 10.5px; line-height: 1.7; color: #2a2a2a; margin-bottom: 2px; }
+  .question-block { background: #f9f9f9; border-left: 3px solid #1a1a1a; padding: 10px 14px; margin: 10px 0; }
+  .question-text { font-size: 11px; font-weight: 700; color: #1a1a1a; line-height: 1.5; }
+  .question-listen { font-size: 9.5px; color: #555; font-style: italic; margin-top: 5px; line-height: 1.5; }
+  .question-listen strong { font-style: normal; }
+  .q-number { font-size: 9px; font-weight: 700; color: #00b377; text-transform: uppercase; margin-bottom: 4px; }
+  .highlight { background: #f0fdf8; border-left: 3px solid #00b377; padding: 10px 14px; margin: 10px 0; }
+  .highlight p { margin: 0; font-size: 10px; }
+  .highlight-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #00b377; margin-bottom: 4px; }
+  .script-line { font-size: 10.5px; color: #1a1a1a; font-style: italic; line-height: 1.6; }
+  .script-line::before { content: '"'; }
+  .script-line::after { content: '"'; }
+  .objection { background: #fffbf0; border-left: 3px solid #f59e0b; padding: 10px 14px; margin: 8px 0; }
+  .obj-q { font-size: 10px; font-weight: 700; color: #b45309; margin-bottom: 4px; }
+  .obj-a { font-size: 10px; color: #2a2a2a; line-height: 1.6; font-style: italic; }
+  .leave-behind { background: #1a1a1a; color: #fff; padding: 12px 16px; margin-top: 12px; }
+  .lb-title { font-size: 10px; font-weight: 700; color: #00b377; text-transform: uppercase; margin-bottom: 6px; }
+  .lb-item { font-size: 10px; color: #ccc; margin-bottom: 3px; }
+  .footer-bar { background: #1a1a1a; color: #888; font-size: 9px; padding: 10px 48px; display: flex; justify-content: space-between; margin-top: 16px; }
+  .note-box { background: #f5f5f5; padding: 10px 14px; margin: 8px 0; border-radius: 2px; }
+  .note-box p { font-size: 10px; color: #555; margin: 0; }
+  strong { color: #1a1a1a; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="brand">ElevatorIQ</div>
+  <div class="doc-label">Meeting Guide &amp; Talk Track</div>
+  <div class="doc-title">Rocky Alazazi — Trinity Health Oakland Hospital</div>
+  <div class="doc-meta">Internal Use Only &nbsp;|&nbsp; 30-Minute Meeting Structure &nbsp;|&nbsp; Pilot Conversation</div>
+</div>
+
+<div class="body">
+
+  <!-- OPEN -->
+  <div class="time-block">
+    <div class="time-header">
+      <div class="time-badge">0–2 min</div>
+      <div class="time-title">Open — Set the Frame</div>
+      <div class="time-sub">Goal: establish credibility + peer tone</div>
+    </div>
+    <div class="time-body">
+      <p>Thank Rocky for his time. One sentence on who you are — lead with domain credibility, not the product:</p>
+      <p class="script-line">I spent 16 years in the elevator industry — five of those running my own consulting practice — and I built ElevatorIQ specifically because I kept seeing facilities teams overpaying for maintenance they couldn't verify.</p>
+      <p style="margin-top: 8px;">Frame the meeting:</p>
+      <p class="script-line">I want to understand your situation first, then show you what we built, and see if it makes sense for your portfolio. This isn't a sales meeting — it's a conversation.</p>
+      <div class="highlight">
+        <div class="highlight-label">Note on Rocky</div>
+        <p>He's a CHFM, LEED AP, BCxP — treat him as a peer, not a prospect. He's also done vendor-side FM at Crothall, so he already knows how service contractors think. Skip the basics. Get to the substance fast.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- DISCOVERY -->
+  <div class="time-block">
+    <div class="time-header">
+      <div class="time-badge">2–12 min</div>
+      <div class="time-title">Discovery — The Most Important Part</div>
+      <div class="time-sub">Listen more than you talk. Take notes.</div>
+    </div>
+    <div class="time-body">
+      <p>Ask these five questions. Let him answer fully before moving on. The information you gather here shapes everything that follows.</p>
+
+      <div class="question-block">
+        <div class="q-number">Question 1 — Contract History</div>
+        <div class="question-text">"How long have you been with the Otis contract here, and when did you last go out to bid on maintenance?"</div>
+        <div class="question-listen"><strong>Listen for:</strong> How long they've been locked in, whether they've ever tested the market, how much leverage they believe they have. If they haven't bid in 5+ years, that's a strong signal that they have no benchmark to compare against — and almost certainly don't know what competitive pricing looks like today.</div>
+      </div>
+
+      <div class="question-block">
+        <div class="q-number">Question 2 — Invoice Review Process</div>
+        <div class="question-text">"When you get an Otis invoice, what's your process for reviewing it — do you have a way to verify what's being billed versus what's actually covered under the contract?"</div>
+        <div class="question-listen"><strong>Listen for:</strong> The core pain point. Most FDs will admit — at some level — that they don't have a system for this. If Rocky says "we just approve it," that's your opening. If he says he does review it, ask what that looks like — you'll find the gaps in the process quickly.</div>
+      </div>
+
+      <div class="question-block">
+        <div class="q-number">Question 3 — Contract Structure Across the Fleet</div>
+        <div class="question-text">"With a mixed-vintage fleet across the campus, are all 30 units on the same contract structure, or do you have different tiers by equipment age or type?"</div>
+        <div class="question-listen"><strong>Listen for:</strong> Over-contracting. If all 30 units are on the same full-maintenance tier regardless of age, use, or duty cycle, that's significant opportunity. Older hydraulic units in the MOB or back-of-house likely don't need full-maintenance coverage at hospital rates.</div>
+      </div>
+
+      <div class="question-block">
+        <div class="q-number">Question 4 — Surprise Charges</div>
+        <div class="question-text">"Have you had any surprise repair bills or callback charges that felt out of scope? How did you handle those?"</div>
+        <div class="question-listen"><strong>Listen for:</strong> A specific story. If yes — that's your demo use case. That's exactly what Module A surfaces. Bonus context: with the $48M ED expansion underway, construction-related callback charges are almost certain to show up. If they already have, that's your lead finding before you even run the analysis.</div>
+      </div>
+
+      <div class="question-block">
+        <div class="q-number">Question 5 — Modernization Horizon</div>
+        <div class="question-text">"What does modernization look like for this portfolio — do you have units approaching end of useful life, and how are you evaluating those decisions?"</div>
+        <div class="question-listen"><strong>Listen for:</strong> Opens the Module B conversation (single modernization or multi-bid comparison). Also tells you whether this is a short-term contract management conversation or a longer-term capital planning relationship. Hospital elevators typically have a 25–30 year useful life; a mixed-vintage fleet almost certainly has units approaching that threshold.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ELEVATORIQ OVERVIEW -->
+  <div class="time-block">
+    <div class="time-header">
+      <div class="time-badge">12–20 min</div>
+      <div class="time-title">ElevatorIQ Overview</div>
+      <div class="time-sub">Brief. Show the report. Let it speak.</div>
+    </div>
+    <div class="time-body">
+      <p>Brief, clear explanation — don't over-explain the tech:</p>
+      <p class="script-line">Upload your invoices as PDFs. ElevatorIQ analyzes them against our Rulebook — 15 years of industry knowledge codified — and returns a structured analysis report in 48 hours, delivered directly to your email.</p>
+      <p style="margin-top: 10px;">Show the sample report. Point directly to two sections:</p>
+      <ul>
+        <li><strong>Risk Signals section</strong> — HIGH/MEDIUM flagged findings with specific recommendations. This is what Rocky actually needs: documented, defensible findings he can take to Otis or to his leadership team.</li>
+        <li><strong>Executive Summary</strong> — The section a FD reads first. Written to be actionable, not academic.</li>
+      </ul>
+      <p class="script-line" style="margin-top: 10px;">This is what an independent elevator consultant would produce manually. We deliver it in 48 hours.</p>
+      <div class="highlight">
+        <div class="highlight-label">Construction Period Angle — Use This If It Fits</div>
+        <p>If Discovery surfaced concerns about the ED expansion: <em>"With active construction on the campus, this is exactly the window where you want an independent baseline on your invoices — before Otis starts billing construction-related callbacks as out-of-scope repairs. Once that pattern establishes, it's much harder to dispute."</em></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- PILOT ASK -->
+  <div class="time-block">
+    <div class="time-header">
+      <div class="time-badge">20–25 min</div>
+      <div class="time-title">Pilot Ask</div>
+      <div class="time-sub">Keep it simple. Nothing to sign today if he's not ready.</div>
+    </div>
+    <div class="time-body">
+      <p class="script-line">Here's what I'd like to propose — and I want to be clear there's nothing to buy here, and no vendor contact involved.</p>
+      <p style="margin-top: 8px;">Walk through the Scope Agreement. The three asks:</p>
+      <ul>
+        <li>Send us 3–6 months of Otis invoices — PDF, email is fine</li>
+        <li>We run the analysis, you have a report within 48 hours</li>
+        <li>30-minute call to debrief on the findings</li>
+      </ul>
+      <p class="script-line" style="margin-top: 8px;">If the findings are useful — and based on what you've described, I think they will be — we talk about what ongoing looks like. But that conversation only happens if you want it to.</p>
+    </div>
+  </div>
+
+  <!-- CLOSE -->
+  <div class="time-block">
+    <div class="time-header">
+      <div class="time-badge">25–30 min</div>
+      <div class="time-title">Close &amp; Next Steps</div>
+      <div class="time-sub">Leave with a clear action item, not "I'll follow up."</div>
+    </div>
+    <div class="time-body">
+      <p>Confirm next steps before leaving the room:</p>
+      <ul>
+        <li>Rocky provides invoices — confirm preferred method: email attachment or secure upload link</li>
+        <li>Set a date for the debrief call: suggest scheduling it for 72 hours after you confirm receipt of his invoices</li>
+        <li>Leave the Value Brief and a copy of the Pilot Scope Agreement</li>
+      </ul>
+      <div class="leave-behind">
+        <div class="lb-title">Leave Behind</div>
+        <div class="lb-item">✓ ElevatorIQ Value Brief (1 page)</div>
+        <div class="lb-item">✓ Pilot Scope Agreement (1 copy for Rocky, 1 for you)</div>
+        <div class="lb-item">✓ Your contact: trey@elevatoriq.ai / your cell</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OBJECTION HANDLING -->
+  <div class="time-block">
+    <div class="time-header">
+      <div class="time-badge">If It Comes Up</div>
+      <div class="time-title">Objection Handling</div>
+      <div class="time-sub"></div>
+    </div>
+    <div class="time-body">
+      <div class="objection">
+        <div class="obj-q">If he asks about future cost / pricing:</div>
+        <div class="obj-a">"We're still finalizing our pricing model. For the pilot, everything is complimentary. If the findings are strong, we'll have that conversation — and your feedback from the pilot will help shape what we build. I'm not going to throw a number at you today."</div>
+      </div>
+      <div class="objection">
+        <div class="obj-q">If he asks how you got his name:</div>
+        <div class="obj-a">"Through the Brinker network — I'm also working on the Brinker Supply side of things and someone made the connection. Grateful for it." (Keep it brief, move on.)</div>
+      </div>
+      <div class="objection">
+        <div class="obj-q">If he says Otis's invoices are fine / no issues:</div>
+        <div class="obj-a">"That's a good position to be in. The pilot would just confirm it — and you'd have a documented, independent baseline on your spend going into the next contract negotiation. Either way, you come out ahead."</div>
+      </div>
+      <div class="objection">
+        <div class="obj-q">If he's concerned about confidentiality / Otis finding out:</div>
+        <div class="obj-a">"Your documents and findings stay strictly confidential — never shared with Otis or any vendor, period. We have no vendor relationships. That's foundational to what we're building."</div>
+      </div>
+      <div class="objection">
+        <div class="obj-q">If he needs to loop in procurement or legal:</div>
+        <div class="obj-a">"Totally reasonable. The agreement is one page, no cost, no obligation — I intentionally kept it simple. Happy to provide whatever context you need for that conversation."</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer-bar">
+  <span>ElevatorIQ — Confidential | Internal Use Only</span>
+  <span>elevatoriq.ai</span>
+  <span>"Upload. Analyze. Decide."</span>
+</div>
+
+</body>
+</html>
