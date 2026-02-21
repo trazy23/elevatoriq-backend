@@ -26,7 +26,15 @@ AI-powered elevator procurement intelligence platform. Users upload elevator inv
 - All keys wired: Anthropic ✅, Cloudflare R2 (`elevatoriq-documents`) ✅, Resend SMTP ✅
 - Live end-to-end test passed: 3 real bids → Claude → PDF → email ✅
 
-## Next Steps
+## Project: Brinker Supply (second major project)
+- Certified MBE supplier, part of Brinker Construction family
+- Four trades: Flooring (Shaw & JJ), Paint (PPG/PPC), Lighting (Stellux), Division 10 (Welko)
+- Model: order per job, minimal inventory, national reach via Brinker logistics
+- Play: auditable MBE diverse spend for GCs and corporations across four trades under one platform
+- Certified by NMSDC. CEO: Larry Brinker Jr.
+- Trey is building this from scratch — will work on this together (separate from ElevatorIQ)
+
+## Next Steps (ElevatorIQ)
 1. Deploy to Railway or Render
 2. Wire frontend to deployed backend URL
 3. Refine Rulebook for better analysis output
