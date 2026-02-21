@@ -4,23 +4,10 @@ const benchmarkService = require('../services/benchmarkService');
 const pdfService = require('../services/pdfService');
 const emailService = require('../services/emailService');
 const storageService = require('../services/storageService');
+const { extractAllDocuments } = require('../services/extractionService');
 const { validate } = require('../validation/extractionSchema');
 const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
-
-// Minimal text extraction from downloaded file
-// In production, expand with pdfjs-dist or similar
-async function extractText(storagePath) {
-  try {
-    const buffer = await storageService.download(storagePath);
-    // For now, convert buffer to string — in production use proper PDF parser
-    const text = buffer.toString('utf8').replace(/[^\x20-\x7E\n\r\t]/g, ' ');
-    return text.substring(0, 50000); // cap at 50k chars
-  } catch (err) {
-    console.error('Text extraction error for', storagePath, err.message);
-    return '[DOCUMENT EXTRACTION FAILED]';
-  }
-}
 
 async function getCustomerEmail(caseId) {
   const result = await db.query(
@@ -179,9 +166,9 @@ async function processCase(caseId) {
     const docs = await db.query('SELECT * FROM documents WHERE case_id=$1', [caseId]);
     if (!docs.rows.length) throw new Error('No documents found for case');
 
-    // 3. Extract text from each document
-    const texts = await Promise.all(docs.rows.map(d => extractText(d.storage_path)));
-    const combinedText = texts.join('\n\n--- NEXT DOCUMENT ---\n\n');
+    // 3. Extract text from each document (PDF, DOCX, DOC)
+    console.log(`[Worker] Extracting text from ${docs.rows.length} document(s)`);
+    const combinedText = await extractAllDocuments(docs.rows);
 
     // 4. Get benchmark context
     const benchmarks = await benchmarkService.getBenchmarkContext(
