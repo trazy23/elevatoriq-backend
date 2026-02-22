@@ -22,7 +22,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // Serve frontend static files
 const path = require('path');
-app.use(express.static(path.join(__dirname, '../elevatoriq-dist')));
+const distPath = process.env.DIST_PATH || path.join(__dirname, '../../elevatoriq-dist');
+console.log(`[init] Serving static files from: ${distPath}`);
+app.use(express.static(distPath));
 
 // Routes
 const casesRouter = require('./src/routes/cases');
@@ -45,7 +47,7 @@ app.use((req, res) => {
   if (req.path.startsWith('/api')) {
     return res.status(404).json({ error: 'API route not found' });
   }
-  res.sendFile(path.join(__dirname, '../elevatoriq-dist/index.html'));
+  res.sendFile(path.join(distPath, 'index.html'));
 });
 
 // Error handler
