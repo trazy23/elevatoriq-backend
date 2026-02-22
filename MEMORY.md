@@ -53,7 +53,39 @@ AI-powered elevator procurement intelligence platform. Users upload elevator inv
 - Trey is building this from scratch — will work on this together (separate from ElevatorIQ)
 - **This is his day job** — daytime sessions are likely Brinker Supply focused
 
-## Next Steps (ElevatorIQ)
+## Day 1 Build Summary (Feb 21-22, 2026)
+
+**What got done:**
+- OpenClaw v1.0 → v1.1 complete — 10 agents (Kirsten + 9 specialists), 6 on free Ollama
+- Cost crisis fixed: switched Kirsten to Claude Haiku (20x cheaper), enabled 1-hour prompt caching (69% hit rate)
+- ElevatorIQ backend pushed to `https://github.com/trazy23/elevatoriq-backend`
+- Trinity Health Oakland pilot package ready (4 PDFs) + research brief complete
+- Model stack optimized: Sonnet for critical reasoning only, Ollama for day-to-day work, Gemini for research/content
+- Prompt caching eliminates re-reading system context on every message
+
+**Cost Impact:**
+- Day 1 spent ~$50 (building, testing, analysis) — not sustainable
+- Now: projected $2-5/day with caching + Haiku for routine work
+- Sonnet only on: Kirsten (orchestration), Builder (code gen), Legal agent (specialized)
+
+## Tomorrow (Feb 22 — 30 minutes max)
+
+1. **Railway deploy** — already logged in (from 01:30 session)
+   ```bash
+   cd ~/OpenClawSandbox/elevatoriq-backend
+   railway up --detach
+   ```
+   Will give you a live URL like `https://elevatoriq-backend-prod.railway.app`
+
+2. **Run schema** on live DB — Kirsten will do this once you have the URL
+
+3. **Wire frontend** — update API_BASE in `ElevatorIQ_Landing_v6.jsx` to the live URL
+
+4. **Test** — POST to `/api/prompt` with a test case
+
+5. **Ready for Rocky's pilot**
+
+## Next Steps (ElevatorIQ — Post-Deploy)
 1. Deploy to Railway or Render
 2. Wire frontend to deployed backend URL
 3. Refine Rulebook for better analysis output
