@@ -61,30 +61,35 @@ router.post('/', upload.single('file'), async (req, res) => {
 
     // 2. Store document reference
     try {
-      await db.query(
+      const docRes = await db.query(
         `INSERT INTO documents (case_id, file_name, file_type, storage_path)
-         VALUES ($1, $2, $3, $4)`,
+         VALUES ($1, $2, $3, $4)
+         RETURNING id`,
         [caseId, file.originalname, file.mimetype, `case-${caseId}/${file.originalname}`]
       );
-      console.log(`[/api/prompt] Stored document for case ${caseId}`);
+      console.log(`[/api/prompt] Stored document ${docRes.rows[0].id} for case ${caseId}`);
     } catch (dbErr) {
-      console.error(`[/api/prompt] Document storage failed:`, dbErr.message);
+      console.error(`[/api/prompt] Document storage failed:`, dbErr.message, dbErr);
       throw dbErr;
     }
 
     // 3. Queue analysis job
     try {
-      await addJob(caseId, {
+      console.log(`[/api/prompt] About to call addJob for case ${caseId}`);
+      const jobData = {
         fileBuffer: file.buffer,
         fileName: file.originalname,
         mimeType: file.mimetype,
         customer_email: customer_email,
         company: company || '(not provided)',
         review_type: review_type,
-      });
+      };
+      console.log(`[/api/prompt] Job data prepared: ${Object.keys(jobData).join(', ')}`);
+      
+      await addJob(caseId, jobData);
       console.log(`[/api/prompt] Queued analysis for case ${caseId}`);
     } catch (workerErr) {
-      console.error(`[/api/prompt] Worker job failed:`, workerErr.message);
+      console.error(`[/api/prompt] Worker job failed:`, workerErr.message, workerErr.stack);
       // Continue anyway — job will run directly
     }
 
