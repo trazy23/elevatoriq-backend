@@ -40,8 +40,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'ElevatorIQ Backend', version: '1.1' });
 });
 
-// SPA fallback — serve index.html for client-side routes
-app.get('*', (req, res) => {
+// SPA fallback — serve index.html for client-side routes (MUST be after API routes)
+app.use((req, res) => {
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ error: 'API route not found' });
+  }
   res.sendFile(path.join(__dirname, '../elevatoriq-dist/index.html'));
 });
 
