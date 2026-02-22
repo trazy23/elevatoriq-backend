@@ -20,6 +20,10 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve frontend static files
+const path = require('path');
+app.use(express.static(path.join(__dirname, '../elevatoriq-dist')));
+
 // Routes
 const casesRouter = require('./src/routes/cases');
 const documentsRouter = require('./src/routes/documents');
@@ -36,9 +40,9 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'ElevatorIQ Backend', version: '1.1' });
 });
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found' });
+// SPA fallback — serve index.html for client-side routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../elevatoriq-dist/index.html'));
 });
 
 // Error handler
