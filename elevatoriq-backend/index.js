@@ -54,5 +54,3 @@ if (require.main === module) {
     console.log(`[ElevatorIQ] Health: http://localhost:${PORT}/health`);
   });
 }
-
-module.exports = app;
