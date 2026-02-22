@@ -43,10 +43,16 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`[ElevatorIQ] Backend running on port ${PORT}`);
-  console.log(`[ElevatorIQ] Health: http://localhost:${PORT}/health`);
-});
+// Export app for Vercel serverless
+module.exports = app;
+
+// Listen locally for development
+if (require.main === module) {
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => {
+    console.log(`[ElevatorIQ] Backend running on port ${PORT}`);
+    console.log(`[ElevatorIQ] Health: http://localhost:${PORT}/health`);
+  });
+}
 
 module.exports = app;
