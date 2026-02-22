@@ -4,10 +4,12 @@ const cors = require('cors');
 
 const app = express();
 
-// CORS — allow elevatoriq.ai frontend
+// CORS — allow elevatoriq.ai frontend and API subdomain
 app.use(cors({
   origin: [
     'https://elevatoriq.ai',
+    'https://api.elevatoriq.ai',
+    'http://api.elevatoriq.ai',
     'http://localhost:3000', // local dev
     'http://localhost:5173', // Vite dev
   ],
