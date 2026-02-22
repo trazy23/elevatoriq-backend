@@ -24,10 +24,12 @@ app.use(express.urlencoded({ extended: true }));
 const casesRouter = require('./src/routes/cases');
 const documentsRouter = require('./src/routes/documents');
 const reportsRouter = require('./src/routes/reports');
+const promptRouter = require('./src/routes/prompt');
 
 app.use('/api/cases', casesRouter);
 app.use('/api/cases/:id/documents', documentsRouter);
 app.use('/api/reports', reportsRouter);
+app.use('/api/prompt', promptRouter);
 
 // Health check
 app.get('/health', (req, res) => {
