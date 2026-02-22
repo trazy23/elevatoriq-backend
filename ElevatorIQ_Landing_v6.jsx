@@ -35,6 +35,7 @@ const ACCEPTED_TYPES = ["application/pdf", "application/msword", "application/vn
 const MAX_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_FILES = 4;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const API_BASE = "https://api.elevatoriq.ai:3001";
 const FORMSPREE_ID = "xnjbvrpr";
 
 const REVIEW_TYPES = [
@@ -476,15 +477,14 @@ function EmailGate({ active, onClose, reviewType }) {
     setSendError(false);
     const rtLabel = REVIEW_TYPES.find(r => r.value === reviewType)?.label || "Document Review";
     try {
-      const res = await fetch(`https://formspree.io/f/${FORMSPREE_ID}`, {
+      const res = await fetch(`${API_BASE}/api/cases`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
-          email: email.trim(),
+          customer_email: email.trim(),
           company: company.trim() || "(not provided)",
-          review_type: rtLabel,
+          review_type: reviewType,
           source: "ElevatorIQ Landing Page v6",
-          _subject: `New ElevatorIQ lead (${rtLabel}): ` + email.trim(),
         }),
       });
       if (res.ok) { setSending(false); setSent(true); }
