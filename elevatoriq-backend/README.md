@@ -85,6 +85,8 @@ curl -X POST http://localhost:3001/api/invoice/parse \
   -F "file=@/absolute/path/to/invoice.pdf"
 ```
 
+Operational runbook: `docs/invoice-parser-runbook.md`
+
 Example response:
 
 ```json
@@ -94,7 +96,7 @@ Example response:
   "extracted_characters": 4821,
   "data": {
     "vendor": "ACME Elevator Services, LLC",
-    "elevator_brand": "Otis",
+    "elevator_brand": "OTIS",
     "elevator_model": "Gen2 MRL",
     "line_items": [
       {

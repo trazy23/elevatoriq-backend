@@ -1,140 +1,218 @@
-function parseMoneyToNumber(value) {
-  if (!value) return null;
-  const cleaned = String(value).replace(/[^0-9.-]/g, '');
-  if (!cleaned) return null;
-  const parsed = Number.parseFloat(cleaned);
-  return Number.isFinite(parsed) ? parsed : null;
+function normalizeLine(line = '') {
+  return String(line).replace(/\s+/g, ' ').trim();
 }
 
-function normalizeLine(line) {
-  return line.replace(/\s+/g, ' ').trim();
+function parseMoneyToNumber(value) {
+  if (value == null) return null;
+
+  let text = String(value).trim();
+  if (!text) return null;
+
+  const isNegative = /^\(.*\)$/.test(text) || /^-/.test(text);
+  text = text.replace(/[()]/g, '').replace(/[^\d,.-]/g, '');
+
+  if (!text) return null;
+
+  const commaCount = (text.match(/,/g) || []).length;
+  const dotCount = (text.match(/\./g) || []).length;
+
+  // If only comma exists and last comma is followed by 2 digits, treat comma as decimal separator.
+  if (commaCount > 0 && dotCount === 0 && /,\d{2}$/.test(text)) {
+    text = text.replace(/,/g, '.');
+  } else if (commaCount > 0 && dotCount > 0) {
+    // Decimal separator is whichever appears last.
+    const lastComma = text.lastIndexOf(',');
+    const lastDot = text.lastIndexOf('.');
+
+    if (lastComma > lastDot) {
+      text = text.replace(/\./g, '').replace(/,/g, '.');
+    } else {
+      text = text.replace(/,/g, '');
+    }
+  } else {
+    text = text.replace(/,/g, '');
+  }
+
+  const parsed = Number.parseFloat(text);
+  if (!Number.isFinite(parsed)) return null;
+  return isNegative ? -Math.abs(parsed) : parsed;
+}
+
+function extractMoneyTokens(line) {
+  const matches = line.match(/(?:\(?-?\$?\d{1,3}(?:[,.]\d{3})*(?:[,.]\d{2})\)?|\(?-?\$?\d+(?:[,.]\d{2})\)?)/g) || [];
+  return matches
+    .map((raw) => parseMoneyToNumber(raw))
+    .filter((n) => Number.isFinite(n));
+}
+
+function stripHeaderNoise(line) {
+  return normalizeLine(line)
+    .replace(/^\[(PDF|DOCX?):[^\]]+\]\s*/i, '')
+    .replace(/^page\s+\d+\s+of\s+\d+$/i, '');
 }
 
 function extractVendor(lines) {
-  const vendorLabel = lines.find((line) => /^vendor\s*:/i.test(line));
-  if (vendorLabel) {
-    return vendorLabel.split(':').slice(1).join(':').trim() || null;
+  const labeled = [
+    /^(vendor|supplier|from|sold by|bill from|service provider)\s*:\s*(.+)$/i,
+    /^(vendor|supplier|from|sold by|bill from|service provider)\s+(.+)$/i,
+  ];
+
+  for (const line of lines) {
+    for (const pattern of labeled) {
+      const m = line.match(pattern);
+      if (m?.[2]) return m[2].trim();
+    }
   }
 
-  const fromLabel = lines.find((line) => /^from\s*:/i.test(line));
-  if (fromLabel) {
-    return fromLabel.split(':').slice(1).join(':').trim() || null;
-  }
+  const stopWords = /\b(invoice|bill to|ship to|date|due date|subtotal|total|statement)\b/i;
+  const candidate = lines.slice(0, 10).find((line) => {
+    if (stopWords.test(line)) return false;
+    if (line.length < 3 || line.length > 90) return false;
+    if (/^[\d\W]+$/.test(line)) return false;
+    return /(inc\.?|llc|ltd\.?|corp\.?|company|services?|elevator|schindler|otis|kone|thyssenkrupp|tk elevator|tke)/i.test(line);
+  });
 
-  // Fallback: first meaningful line if it looks like a company name
-  const first = lines.find((line) => /[a-z]/i.test(line));
-  if (first && /(inc\.?|llc|corp\.?|co\.?|elevator|thyssenkrupp|otis|schindler|kone|tke)/i.test(first)) {
-    return first;
-  }
-
-  return null;
+  return candidate || null;
 }
 
 function extractElevatorBrand(lines) {
-  const brandLabel = lines.find((line) => /^(brand|manufacturer)\s*:/i.test(line));
-  if (brandLabel) {
-    return brandLabel.split(':').slice(1).join(':').trim() || null;
-  }
+  const brandMap = {
+    otis: 'OTIS',
+    schindler: 'SCHINDLER',
+    kone: 'KONE',
+    thyssenkrupp: 'THYSSENKRUPP',
+    'tk elevator': 'TK ELEVATOR',
+    tke: 'TK ELEVATOR',
+    mitsubishi: 'MITSUBISHI',
+    fujitec: 'FUJITEC',
+    hyundai: 'HYUNDAI',
+  };
 
-  const knownBrands = ['otis', 'schindler', 'kone', 'thyssenkrupp', 'tk elevator', 'tke', 'mitsubishi', 'fujitec', 'hyundai'];
-  const match = lines.find((line) => knownBrands.some((brand) => line.toLowerCase().includes(brand)));
-  if (!match) return null;
-
-  for (const brand of knownBrands) {
-    if (match.toLowerCase().includes(brand)) {
-      return brand.toUpperCase();
+  for (const line of lines) {
+    const labelMatch = line.match(/^(brand|manufacturer|oem|elevator brand)\s*:\s*(.+)$/i);
+    if (labelMatch?.[2]) {
+      const labeled = labelMatch[2].trim();
+      const canonical = Object.entries(brandMap).find(([k]) => labeled.toLowerCase().includes(k));
+      return canonical ? canonical[1] : labeled;
     }
+
+    const found = Object.entries(brandMap).find(([brand]) => line.toLowerCase().includes(brand));
+    if (found) return found[1];
   }
 
   return null;
 }
 
 function extractElevatorModel(lines) {
-  const modelLine = lines.find((line) => /^(model|elevator model|unit model)\s*:/i.test(line));
-  if (!modelLine) return null;
-  return modelLine.split(':').slice(1).join(':').trim() || null;
-}
-
-function extractTotals(lines) {
-  const totals = {
-    subtotal: null,
-    tax: null,
-    total: null,
-  };
+  const patterns = [
+    /^(model|elevator model|unit model|equipment model|controller model)\s*:\s*(.+)$/i,
+    /\bmodel\s*#?\s*[:\-]\s*([a-z0-9 _./-]{2,})$/i,
+  ];
 
   for (const line of lines) {
-    const normalized = line.toLowerCase();
-
-    if (totals.subtotal == null && /^subtotal\b/.test(normalized)) {
-      const m = line.match(/(-?\$?[\d,]+(?:\.\d{2})?)/);
-      totals.subtotal = parseMoneyToNumber(m?.[1]);
-    }
-
-    if (totals.tax == null && /\b(tax|sales tax)\b/.test(normalized)) {
-      const m = line.match(/(-?\$?[\d,]+(?:\.\d{2})?)/);
-      totals.tax = parseMoneyToNumber(m?.[1]);
-    }
-
-    if (totals.total == null && /\b(total due|amount due|grand total|invoice total|total)\b/.test(normalized)) {
-      const m = line.match(/(-?\$?[\d,]+(?:\.\d{2})?)/);
-      totals.total = parseMoneyToNumber(m?.[1]);
+    for (const pattern of patterns) {
+      const m = line.match(pattern);
+      if (m?.[2]) return m[2].trim();
+      if (m?.[1] && pattern.source.includes('\\bmodel')) return m[1].trim();
     }
   }
 
+  return null;
+}
+
+function extractTotals(lines) {
+  const totals = { subtotal: null, tax: null, total: null };
+
+  const labels = {
+    subtotal: /\b(subtotal|sub total|net amount|before tax)\b/i,
+    tax: /\b(tax|sales tax|vat|gst|hst)\b/i,
+    total: /\b(total due|amount due|grand total|invoice total|balance due|total)\b/i,
+  };
+
+  for (const line of lines) {
+    const money = extractMoneyTokens(line);
+    if (!money.length) continue;
+
+    if (totals.subtotal == null && labels.subtotal.test(line)) totals.subtotal = money[money.length - 1];
+    if (totals.tax == null && labels.tax.test(line)) totals.tax = money[money.length - 1];
+    if (totals.total == null && labels.total.test(line)) totals.total = money[money.length - 1];
+  }
+
   return totals;
+}
+
+function extractQuantity(line) {
+  const leading = line.match(/^\s*(\d+(?:\.\d+)?)\s+(?:x\s+)?/i);
+  if (leading) return Number.parseFloat(leading[1]);
+
+  const inline = line.match(/\bqty\s*[:#]?\s*(\d+(?:\.\d+)?)/i);
+  if (inline) return Number.parseFloat(inline[1]);
+
+  return null;
+}
+
+function cleanItemDescription(line) {
+  return normalizeLine(
+    line
+      .replace(/^\s*(\d+(?:\.\d+)?)\s+(?:x\s+)?/i, '')
+      .replace(/\bqty\s*[:#]?\s*\d+(?:\.\d+)?/ig, '')
+      .replace(/\(?-?\$?\d{1,3}(?:[,.]\d{3})*(?:[,.]\d{2})\)?/g, '')
+      .replace(/[.]{2,}/g, ' ')
+      .replace(/[|]+/g, ' ')
+  );
+}
+
+function isLikelySummaryLine(line) {
+  return /\b(subtotal|tax|total due|amount due|grand total|invoice total|balance due|total|payment|past due)\b/i.test(line);
 }
 
 function extractLineItems(lines) {
   const items = [];
 
   for (const line of lines) {
-    // Typical line item format examples:
-    // 2 Brake pads $120.00 $240.00
-    // Door operator replacement ....... $3,300.00
-    const hasMoney = /\$?[\d,]+\.\d{2}/.test(line);
-    if (!hasMoney) continue;
+    if (isLikelySummaryLine(line)) continue;
 
-    if (/\b(subtotal|tax|total due|amount due|grand total|invoice total|total)\b/i.test(line)) {
+    const money = extractMoneyTokens(line);
+    if (!money.length) continue;
+
+    const description = cleanItemDescription(line);
+    if (!description || description.length < 2) continue;
+
+    const quantity = extractQuantity(line);
+    const total = money[money.length - 1] ?? null;
+    const unitPrice = money.length > 1 ? money[money.length - 2] : null;
+
+    if (quantity != null && unitPrice == null && total != null) {
+      items.push({ description, quantity, unit_price: total / quantity, total });
       continue;
     }
 
-    const normalized = normalizeLine(line);
-    const moneyMatches = [...normalized.matchAll(/(\$?[\d,]+\.\d{2})/g)].map((m) => m[1]);
-    if (!moneyMatches.length) continue;
-
-    let quantity = null;
-    const qtyMatch = normalized.match(/^(\d+(?:\.\d+)?)\s+/);
-    if (qtyMatch) quantity = Number.parseFloat(qtyMatch[1]);
-
-    const total = parseMoneyToNumber(moneyMatches[moneyMatches.length - 1]);
-    const unit_price = moneyMatches.length > 1 ? parseMoneyToNumber(moneyMatches[moneyMatches.length - 2]) : null;
-
-    const description = normalized
-      .replace(/^(\d+(?:\.\d+)?)\s+/, '')
-      .replace(/(\$?[\d,]+\.\d{2}).*$/, '')
-      .replace(/[.]{2,}/g, ' ')
-      .trim();
-
-    if (!description) continue;
-
-    items.push({ description, quantity, unit_price, total });
+    items.push({ description, quantity, unit_price: unitPrice, total });
   }
 
-  return items.slice(0, 50);
+  return items.slice(0, 75);
 }
 
 function parseInvoiceText(rawText = '') {
-  const lines = rawText
+  const lines = String(rawText)
     .split(/\n/)
-    .map((line) => normalizeLine(line))
+    .map((line) => stripHeaderNoise(line))
     .filter(Boolean);
+
+  const totals = extractTotals(lines);
+  const lineItems = extractLineItems(lines);
+
+  if (totals.subtotal == null && lineItems.length) {
+    const sum = lineItems.reduce((acc, item) => acc + (item.total || 0), 0);
+    if (sum > 0) totals.subtotal = Number(sum.toFixed(2));
+  }
 
   return {
     vendor: extractVendor(lines),
     elevator_brand: extractElevatorBrand(lines),
     elevator_model: extractElevatorModel(lines),
-    line_items: extractLineItems(lines),
-    totals: extractTotals(lines),
+    line_items: lineItems,
+    totals,
   };
 }
 
