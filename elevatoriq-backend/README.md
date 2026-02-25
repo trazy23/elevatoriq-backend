@@ -51,6 +51,11 @@ npm run dev
 | `FROM_EMAIL` | Sender email address |
 | `REDIS_HOST` | Redis host for Bull queue (default: 127.0.0.1) |
 | `PORT` | Server port (default: 3001) |
+| `PARSER_API_ENABLED` | Feature flag for parser API consumer integration (default: false) |
+| `PARSER_API_BASE_URL` | Parser API base URL (default: http://localhost:3001) |
+| `PARSER_API_TIMEOUT_MS` | Parser API timeout in ms (default: 30000) |
+| `PARSER_API_BEARER_TOKEN` | Optional bearer token for protected parser API |
+
 
 ## API Endpoints
 
