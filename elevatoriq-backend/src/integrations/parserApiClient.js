@@ -70,9 +70,14 @@ async function parseInvoiceViaBackend(filePayload, fileName, opts = {}) {
     const payload = await response.json().catch(() => null);
 
     if (!response.ok) {
-      const message = payload?.error || `Parser API request failed (${response.status})`;
+      const normalizedError = payload?.error && typeof payload.error === 'object'
+        ? payload.error
+        : { message: payload?.error };
+      const message = normalizedError?.message || `Parser API request failed (${response.status})`;
       const err = new Error(message);
-      err.status = response.status;
+      err.status = normalizedError?.http_status || response.status;
+      err.code = normalizedError?.code || 'PARSER_API_REQUEST_FAILED';
+      err.retryable = Boolean(normalizedError?.retryable);
       err.payload = payload;
       throw err;
     }

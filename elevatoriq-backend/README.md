@@ -87,7 +87,7 @@ curl -X POST http://localhost:3001/api/invoice/parse \
 
 Operational runbook: `docs/invoice-parser-runbook.md`
 
-Example response:
+Example success response:
 
 ```json
 {
@@ -111,6 +111,59 @@ Example response:
       "tax": 33,
       "total": 583
     }
+  },
+  "normalized": {
+    "supplier_name": "ACME Elevator Services, LLC",
+    "oem_brand": "OTIS",
+    "oem_model": "Gen2 MRL",
+    "currency": "USD",
+    "totals": {
+      "subtotal_amount": 550,
+      "tax_amount": 33,
+      "invoice_total_amount": 583
+    },
+    "line_items": [
+      {
+        "index": 0,
+        "title": "Door Roller Assemblies",
+        "quantity": 2,
+        "unit_amount": 125,
+        "line_total": 250,
+        "category_hint": "parts_or_other"
+      }
+    ],
+    "bid_analysis": {
+      "inferred_service_scope": ["Door Roller Assemblies"],
+      "inferred_vendor_slug": "acme_elevator_services_llc"
+    }
+  },
+  "confidence": {
+    "overall": "high",
+    "overall_score": 0.901,
+    "fields": {
+      "vendor": 0.86,
+      "elevator_brand": 0.88,
+      "elevator_model": 0.78,
+      "totals_subtotal": 0.92,
+      "totals_tax": 0.84,
+      "totals_total": 0.95,
+      "line_items_count": 0.62
+    },
+    "methodology": "heuristic_v1"
+  }
+}
+```
+
+Example error response:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "UNREADABLE_DOCUMENT",
+    "message": "PDF appears to be image-based or empty — no extractable text found.",
+    "http_status": 422,
+    "retryable": false
   }
 }
 ```

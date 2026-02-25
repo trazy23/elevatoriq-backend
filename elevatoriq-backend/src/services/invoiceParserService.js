@@ -16,11 +16,9 @@ function parseMoneyToNumber(value) {
   const commaCount = (text.match(/,/g) || []).length;
   const dotCount = (text.match(/\./g) || []).length;
 
-  // If only comma exists and last comma is followed by 2 digits, treat comma as decimal separator.
   if (commaCount > 0 && dotCount === 0 && /,\d{2}$/.test(text)) {
     text = text.replace(/,/g, '.');
   } else if (commaCount > 0 && dotCount > 0) {
-    // Decimal separator is whichever appears last.
     const lastComma = text.lastIndexOf(',');
     const lastDot = text.lastIndexOf('.');
 
@@ -193,6 +191,81 @@ function extractLineItems(lines) {
   return items.slice(0, 75);
 }
 
+function toSlug(value) {
+  if (!value) return null;
+  return String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || null;
+}
+
+function mapNormalizedOutput(parsed) {
+  const lineItems = Array.isArray(parsed?.line_items)
+    ? parsed.line_items.map((item, idx) => ({
+      index: idx,
+      title: item.description,
+      quantity: item.quantity,
+      unit_amount: item.unit_price,
+      line_total: item.total,
+      category_hint: /labor|service|inspection|diagnostic/i.test(item.description) ? 'labor' : 'parts_or_other',
+    }))
+    : [];
+
+  return {
+    supplier_name: parsed?.vendor || null,
+    oem_brand: parsed?.elevator_brand || null,
+    oem_model: parsed?.elevator_model || null,
+    currency: 'USD',
+    totals: {
+      subtotal_amount: parsed?.totals?.subtotal ?? null,
+      tax_amount: parsed?.totals?.tax ?? null,
+      invoice_total_amount: parsed?.totals?.total ?? null,
+    },
+    line_items: lineItems,
+    bid_analysis: {
+      inferred_service_scope: lineItems.map((li) => li.title).slice(0, 12),
+      inferred_vendor_slug: toSlug(parsed?.vendor),
+    },
+  };
+}
+
+function buildConfidenceMetadata(parsed, extractedText = '') {
+  const fields = {
+    vendor: parsed?.vendor,
+    elevator_brand: parsed?.elevator_brand,
+    elevator_model: parsed?.elevator_model,
+    totals_subtotal: parsed?.totals?.subtotal,
+    totals_tax: parsed?.totals?.tax,
+    totals_total: parsed?.totals?.total,
+    line_items_count: Array.isArray(parsed?.line_items) ? parsed.line_items.length : 0,
+  };
+
+  const scored = {
+    vendor: fields.vendor ? 0.86 : 0.12,
+    elevator_brand: fields.elevator_brand ? 0.88 : 0.18,
+    elevator_model: fields.elevator_model ? 0.78 : 0.15,
+    totals_subtotal: Number.isFinite(fields.totals_subtotal) ? 0.92 : 0.22,
+    totals_tax: Number.isFinite(fields.totals_tax) ? 0.84 : 0.2,
+    totals_total: Number.isFinite(fields.totals_total) ? 0.95 : 0.24,
+    line_items_count: fields.line_items_count > 0 ? Math.min(0.98, 0.5 + (fields.line_items_count * 0.06)) : 0.1,
+  };
+
+  const coverage = Object.values(scored).reduce((sum, n) => sum + n, 0) / Object.keys(scored).length;
+  const textQualityBoost = String(extractedText || '').length > 700 ? 0.03 : 0;
+  const overallValue = Math.max(0, Math.min(1, coverage + textQualityBoost));
+
+  let overall = 'low';
+  if (overallValue >= 0.8) overall = 'high';
+  else if (overallValue >= 0.55) overall = 'medium';
+
+  return {
+    overall,
+    overall_score: Number(overallValue.toFixed(3)),
+    fields: scored,
+    methodology: 'heuristic_v1',
+  };
+}
+
 function parseInvoiceText(rawText = '') {
   const lines = String(rawText)
     .split(/\n/)
@@ -207,16 +280,20 @@ function parseInvoiceText(rawText = '') {
     if (sum > 0) totals.subtotal = Number(sum.toFixed(2));
   }
 
-  return {
+  const parsed = {
     vendor: extractVendor(lines),
     elevator_brand: extractElevatorBrand(lines),
     elevator_model: extractElevatorModel(lines),
     line_items: lineItems,
     totals,
   };
+
+  return parsed;
 }
 
 module.exports = {
   parseInvoiceText,
   parseMoneyToNumber,
+  mapNormalizedOutput,
+  buildConfidenceMetadata,
 };
