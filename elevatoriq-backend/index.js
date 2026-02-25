@@ -40,11 +40,13 @@ const casesRouter = require('./src/routes/cases');
 const documentsRouter = require('./src/routes/documents');
 const reportsRouter = require('./src/routes/reports');
 const promptRouter = require('./src/routes/prompt');
+const invoiceRouter = require('./src/routes/invoice');
 
 app.use('/api/cases', casesRouter);
 app.use('/api/cases/:id/documents', documentsRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/prompt', promptRouter);
+app.use('/api/invoice', invoiceRouter);
 
 // Health check
 app.get('/health', (req, res) => {

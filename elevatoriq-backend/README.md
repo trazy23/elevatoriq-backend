@@ -61,7 +61,52 @@ npm run dev
 | POST | `/api/cases/:id/run` | Trigger analysis |
 | GET | `/api/cases/:id/status` | Poll case status |
 | GET | `/api/reports/download/:token` | Download PDF report |
+| POST | `/api/invoice/parse` | Upload PDF invoice and extract structured fields |
 | GET | `/health` | Health check |
+
+## Invoice Parse API (Sprint 001)
+
+Endpoint: `POST /api/invoice/parse`
+
+- Content type: `multipart/form-data`
+- Required file field: `file`
+- Accepted type: PDF only
+- Max size: 15 MB
+
+Example request:
+
+```bash
+curl -X POST http://localhost:3001/api/invoice/parse \
+  -F "file=@/absolute/path/to/invoice.pdf"
+```
+
+Example response:
+
+```json
+{
+  "success": true,
+  "file_name": "invoice-2026-01-31.pdf",
+  "extracted_characters": 4821,
+  "data": {
+    "vendor": "ACME Elevator Services, LLC",
+    "elevator_brand": "Otis",
+    "elevator_model": "Gen2 MRL",
+    "line_items": [
+      {
+        "description": "Door Roller Assemblies",
+        "quantity": 2,
+        "unit_price": 125,
+        "total": 250
+      }
+    ],
+    "totals": {
+      "subtotal": 550,
+      "tax": 33,
+      "total": 583
+    }
+  }
+}
+```
 
 ## Architecture
 
