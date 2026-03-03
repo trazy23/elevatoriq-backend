@@ -6,7 +6,9 @@ const emailService = require('../services/emailService');
 const storageService = require('../services/storageService');
 const { extractAllDocuments } = require('../services/extractionService');
 const { validate } = require('../validation/extractionSchema');
-const { v4: uuidv4 } = require('uuid');
+const { randomUUID } = require('crypto');
+const uuidv4 = () => randomUUID();
+const { getStructuredReportKey } = require('../utils/reportArtifacts');
 require('dotenv').config();
 
 async function getCustomerEmail(caseId) {
@@ -153,6 +155,35 @@ async function saveFactTables(extractionId, json) {
   }
 }
 
+async function persistStructuredReport(caseId, caseRow, docs, analysisResult, extractionId) {
+  const payload = {
+    case_id: caseId,
+    review_type: caseRow.review_type,
+    module: caseRow.module,
+    status: 'complete',
+    generated_at: new Date().toISOString(),
+    source_documents: docs.rows.map((doc) => ({
+      id: doc.id,
+      file_name: doc.file_name,
+      file_type: doc.file_type,
+      storage_path: doc.storage_path,
+      uploaded_at: doc.uploaded_at,
+    })),
+    report_body: analysisResult.reportBody,
+    extraction_json: analysisResult.extractionJson ? JSON.parse(analysisResult.extractionJson) : null,
+    extraction_id: extractionId,
+  };
+
+  const key = getStructuredReportKey(caseId);
+  await storageService.uploadBuffer(
+    Buffer.from(JSON.stringify(payload, null, 2), 'utf8'),
+    key,
+    'application/json'
+  );
+
+  return key;
+}
+
 // Main job processor
 async function processCase(caseId) {
   console.log(`[Worker] Starting analysis for case: ${caseId}`);
@@ -182,14 +213,23 @@ async function processCase(caseId) {
     );
 
     // 6. Validate + save extraction (non-blocking on failure)
+    let extractionId = null;
     if (analysisResult.extractionJson) {
-      await saveExtraction(caseId, analysisResult);
+      extractionId = await saveExtraction(caseId, analysisResult);
     }
 
-    // 7. Generate download token first (so QR code can embed the link)
+    // 7. Persist structured report JSON artifact (non-blocking)
+    let structuredReportPath = null;
+    try {
+      structuredReportPath = await persistStructuredReport(caseId, caseRow, docs, analysisResult, extractionId);
+    } catch (err) {
+      console.warn(`[Worker] Structured report artifact upload failed for ${caseId}:`, err.message);
+    }
+
+    // 8. Generate download token first (so QR code can embed the link)
     const token = uuidv4();
 
-    // 8. Generate PDF with QR code pointing to the download URL
+    // 9. Generate PDF with QR code pointing to the download URL
     const { key: pdfKey, buffer: pdfBuffer } = await pdfService.generateAndUploadPDF(
       analysisResult.reportBody, caseId, caseRow.review_type, token
     );
@@ -198,19 +238,22 @@ async function processCase(caseId) {
       [caseId, pdfKey, token]
     );
 
-    // 9. Send email (if we have an email address)
+    // 10. Send email (if we have an email address)
     const customerEmail = await getCustomerEmail(caseId);
     if (customerEmail) {
       await emailService.sendReport(customerEmail, pdfBuffer, caseRow.review_type, token);
       await db.query(`UPDATE reports SET emailed_at=NOW() WHERE download_token=$1`, [token]);
     }
 
-    // 10. Mark case complete
+    // 11. Mark case complete
     await db.query(
       `UPDATE cases SET status='complete', completed_at=NOW() WHERE id=$1`,
       [caseId]
     );
     console.log(`[Worker] Case complete: ${caseId}`);
+    if (structuredReportPath) {
+      console.log(`[Worker] Structured report artifact: ${structuredReportPath}`);
+    }
 
   } catch (err) {
     console.error(`[Worker] Failed for case ${caseId}:`, err.message);

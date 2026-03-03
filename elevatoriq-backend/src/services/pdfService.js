@@ -1,6 +1,7 @@
 const puppeteer = require('puppeteer');
 const QRCode = require('qrcode');
 const storageService = require('./storageService');
+const { BRAND, COLORS, TYPOGRAPHY, logoWordmarkHtml } = require('./reportBranding');
 
 const REVIEW_LABELS = {
   modernization_comparison:    'Modernization Bid Comparison',
@@ -133,7 +134,7 @@ async function buildCoverPage(label, date, downloadUrl) {
     qrDataUrl = await QRCode.toDataURL(downloadUrl, {
       width: 110,
       margin: 1,
-      color: { dark: '#0B0E13', light: '#FFFFFF' },
+      color: { dark: COLORS.ink, light: COLORS.white },
     });
   } catch (e) {
     console.warn('[PDF] QR code generation failed:', e.message);
@@ -143,8 +144,8 @@ async function buildCoverPage(label, date, downloadUrl) {
     <div class="cover">
       <!-- Dark top band -->
       <div class="cover-header">
-        <div class="cover-logo">Elevator<span>IQ</span></div>
-        <div class="cover-logo-tag">Structured intelligence, not guesswork.</div>
+        <div class="cover-logo">${logoWordmarkHtml('cover-wordmark')}</div>
+        <div class="cover-logo-tag">${escapeHtml(BRAND.tagline)}</div>
       </div>
       <div class="cover-accent-bar"></div>
 
@@ -184,14 +185,14 @@ async function buildCoverPage(label, date, downloadUrl) {
             <div class="cover-qr-label">Scan to access<br/>your secure report</div>
           </div>
         ` : ''}
-        <div class="cover-url">elevatoriq.ai</div>
+        <div class="cover-url">${escapeHtml(BRAND.domain)}</div>
       </div>
 
       <!-- Bottom footer bar -->
       <div class="cover-footer">
         <div class="cover-footer-left">
-          <span class="cover-footer-logo">Elevator<span>IQ</span></span>
-          <span class="cover-footer-tag">"Upload. Analyze. Decide."</span>
+          <span class="cover-footer-logo">${logoWordmarkHtml('cover-footer-wordmark')}</span>
+          <span class="cover-footer-tag">${escapeHtml(BRAND.footerTagline)}</span>
         </div>
         <div class="cover-footer-right">
           Secure · Confidential · No Vendor Affiliations
@@ -207,17 +208,34 @@ async function wrapInHTML(reportBody, reviewType, downloadUrl) {
   const label = REVIEW_LABELS[reviewType] || reviewType;
   const date  = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const bodyHtml  = formatBody(reportBody);
-  const coverHtml = await buildCoverPage(label, date, downloadUrl || 'https://elevatoriq.ai');
+  const coverHtml = await buildCoverPage(label, date, downloadUrl || `https://${BRAND.domain}`);
 
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
 <style>
+@import url('${TYPOGRAPHY.googleFontsCss2}');
+
+:root {
+  --eiq-ink: ${COLORS.ink};
+  --eiq-ink-mid: ${COLORS.inkMid};
+  --eiq-accent: ${COLORS.accent};
+  --eiq-white: ${COLORS.white};
+  --eiq-gray-100: ${COLORS.gray100};
+  --eiq-gray-300: ${COLORS.gray300};
+  --eiq-gray-400: ${COLORS.gray400};
+  --eiq-gray-500: ${COLORS.gray500};
+  --eiq-gray-600: ${COLORS.gray600};
+  --eiq-risk: ${COLORS.risk};
+  --eiq-caution: ${COLORS.caution};
+}
 
 /* ══════════ RESET ══════════ */
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: Helvetica, Arial, sans-serif; font-size: 10.5pt; color: #1a1f2a; background: white; line-height: 1.65; }
+body { font-family: ${TYPOGRAPHY.sans}; font-size: 10.5pt; color: var(--eiq-ink-mid); background: white; line-height: 1.65; }
+.brand-wordmark { font-family: ${TYPOGRAPHY.sans}; font-weight: 700; letter-spacing: -0.03em; color: var(--eiq-white); }
+.brand-wordmark-accent { color: var(--eiq-accent); }
 
 /* ══════════ COVER PAGE ══════════ */
 .cover {
@@ -227,42 +245,42 @@ body { font-family: Helvetica, Arial, sans-serif; font-size: 10.5pt; color: #1a1
   background: white;
 }
 .cover-header {
-  background: #0B0E13;
+  background: var(--eiq-ink);
   padding: 40px 52px 28px;
 }
 .cover-logo {
   font-size: 38pt; font-weight: 800; color: white; letter-spacing: -1.5px; line-height: 1;
 }
-.cover-logo span { color: #00B876; }
+.cover-logo span { color: var(--eiq-accent); }
 .cover-logo-tag {
-  font-size: 10pt; color: #4B5563; margin-top: 8px; letter-spacing: 0.04em; font-style: italic;
+  font-size: 10pt; color: var(--eiq-gray-500); margin-top: 8px; letter-spacing: 0.04em; font-style: italic;
 }
-.cover-accent-bar { background: #00B876; height: 4px; }
+.cover-accent-bar { background: var(--eiq-accent); height: 4px; }
 
 .cover-body {
   flex: 1; display: flex; flex-direction: column; justify-content: center;
   align-items: flex-start; padding: 52px 52px 32px;
 }
 .cover-report-label {
-  font-size: 9pt; font-weight: 700; color: #00B876; letter-spacing: 0.18em;
+  font-size: 9pt; font-weight: 700; color: var(--eiq-accent); letter-spacing: 0.18em;
   text-transform: uppercase; margin-bottom: 16px;
 }
 .cover-report-type {
-  font-size: 28pt; font-weight: 800; color: #0B0E13; letter-spacing: -0.8px;
+  font-size: 28pt; font-weight: 800; color: var(--eiq-ink); letter-spacing: -0.8px;
   line-height: 1.15; max-width: 520px; margin-bottom: 18px;
 }
 .cover-date {
-  font-size: 11pt; color: #6B7280; margin-bottom: 40px;
+  font-size: 11pt; color: var(--eiq-gray-400); margin-bottom: 40px;
 }
 .cover-divider {
-  width: 60px; height: 3px; background: #00B876; margin-bottom: 40px; border-radius: 2px;
+  width: 60px; height: 3px; background: var(--eiq-accent); margin-bottom: 40px; border-radius: 2px;
 }
 .cover-trust-row {
   display: flex; gap: 32px;
 }
 .cover-trust-item { display: flex; align-items: flex-start; gap: 10px; }
 .cover-trust-icon {
-  width: 26px; height: 26px; background: #00B876; border-radius: 50%;
+  width: 26px; height: 26px; background: var(--eiq-accent); border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   color: white; font-size: 11pt; font-weight: 800; flex-shrink: 0;
   line-height: 1;
@@ -277,58 +295,58 @@ body { font-family: Helvetica, Arial, sans-serif; font-size: 10.5pt; color: #1a1
 }
 .cover-qr-block { display: flex; align-items: center; gap: 14px; }
 .cover-qr-img { width: 90px; height: 90px; border: 1px solid #E5E7EB; border-radius: 6px; padding: 4px; }
-.cover-qr-label { font-size: 8.5pt; color: #6B7280; line-height: 1.5; }
-.cover-url { font-size: 9pt; color: #9CA3AF; letter-spacing: 0.04em; }
+.cover-qr-label { font-size: 8.5pt; color: var(--eiq-gray-400); line-height: 1.5; }
+.cover-url { font-size: 9pt; color: var(--eiq-gray-300); letter-spacing: 0.04em; }
 
 .cover-footer {
-  background: #0B0E13; padding: 16px 52px;
+  background: var(--eiq-ink); padding: 16px 52px;
   display: flex; justify-content: space-between; align-items: center;
 }
 .cover-footer-left { display: flex; align-items: center; gap: 20px; }
 .cover-footer-logo { font-size: 14pt; font-weight: 800; color: white; letter-spacing: -0.5px; }
-.cover-footer-logo span { color: #00B876; }
-.cover-footer-tag { font-size: 8pt; color: #4B5563; font-style: italic; }
-.cover-footer-right { font-size: 7.5pt; color: #4B5563; }
+.cover-footer-logo span { color: var(--eiq-accent); }
+.cover-footer-tag { font-size: 8pt; color: var(--eiq-gray-500); font-style: italic; }
+.cover-footer-right { font-size: 7.5pt; color: var(--eiq-gray-500); }
 
 /* ══════════ REPORT HEADER (pages 2+) ══════════ */
 .report-header {
-  background: #0B0E13;
+  background: var(--eiq-ink);
   padding: 14px 44px;
   display: flex; justify-content: space-between; align-items: center;
 }
 .report-header-logo { font-size: 15pt; font-weight: 800; color: white; letter-spacing: -0.5px; }
-.report-header-logo span { color: #00B876; }
-.report-header-right { font-size: 8.5pt; color: #4B5563; text-align: right; line-height: 1.6; }
-.report-accent { background: #00B876; height: 3px; }
+.report-header-logo span { color: var(--eiq-accent); }
+.report-header-right { font-size: 8.5pt; color: var(--eiq-gray-500); text-align: right; line-height: 1.6; }
+.report-accent { background: var(--eiq-accent); height: 3px; }
 
 /* ══════════ CONTENT ══════════ */
 .content { padding: 32px 48px 48px; }
 
-p { margin: 6px 0; color: #1F2937; }
+p { margin: 6px 0; color: var(--eiq-ink-mid); }
 
 /* Section block */
 .section-block {
   display: flex; align-items: flex-start; gap: 14px;
   margin: 34px 0 12px 0;
   padding-bottom: 10px;
-  border-bottom: 2px solid #0B0E13;
+  border-bottom: 2px solid var(--eiq-ink);
   page-break-after: avoid;
 }
 .section-number {
-  font-size: 22pt; font-weight: 800; color: #00B876;
+  font-size: 22pt; font-weight: 800; color: var(--eiq-accent);
   line-height: 1; flex-shrink: 0; letter-spacing: -1px;
   margin-top: -4px;
 }
 h2.section-title {
-  font-size: 14pt; font-weight: 800; color: #0B0E13;
+  font-size: 14pt; font-weight: 800; color: var(--eiq-ink);
   letter-spacing: -0.3px; line-height: 1.2;
-  text-decoration: underline; text-decoration-color: #00B876;
+  text-decoration: underline; text-decoration-color: var(--eiq-accent);
   text-underline-offset: 4px;
 }
 
 h3.sub-heading {
   font-size: 9pt; font-weight: 700; color: white;
-  background: #0B0E13;
+  background: var(--eiq-ink);
   padding: 5px 10px;
   margin: 20px 0 8px 0;
   letter-spacing: 0.1em;
@@ -343,8 +361,8 @@ h3.sub-heading {
 }
 
 ul { padding-left: 22px; margin: 8px 0; }
-li { margin: 5px 0; color: #1F2937; }
-li strong { color: #0B0E13; }
+li { margin: 5px 0; color: var(--eiq-ink-mid); }
+li strong { color: var(--eiq-ink); }
 
 .gap { height: 8px; }
 
@@ -355,18 +373,18 @@ li strong { color: #0B0E13; }
   margin: 14px 0; border-radius: 0 6px 6px 0;
   page-break-inside: avoid;
 }
-.risk-high   { border-color: #DC2626; background: #fef2f2; }
-.risk-med    { border-color: #D97706; background: #fffbeb; }
-.risk-low    { border-color: #6B7280; background: #f9fafb; }
+.risk-high   { border-color: var(--eiq-risk); background: #fef2f2; }
+.risk-med    { border-color: var(--eiq-caution); background: #fffbeb; }
+.risk-low    { border-color: var(--eiq-gray-400); background: #f9fafb; }
 
 .risk-badge {
   font-size: 7.5pt; font-weight: 800; padding: 3px 9px;
   border-radius: 3px; color: white; letter-spacing: 0.08em;
   text-transform: uppercase; white-space: nowrap; flex-shrink: 0; margin-top: 1px;
 }
-.risk-high .risk-badge { background: #DC2626; }
-.risk-med  .risk-badge { background: #D97706; }
-.risk-low  .risk-badge { background: #6B7280; }
+.risk-high .risk-badge { background: var(--eiq-risk); }
+.risk-med  .risk-badge { background: var(--eiq-caution); }
+.risk-low  .risk-badge { background: var(--eiq-gray-400); }
 .risk-title { font-size: 10.5pt; font-weight: 700; color: #111827; }
 
 .sub-label { margin: 4px 0 4px 18px; color: #374151; font-size: 10pt; }
@@ -374,17 +392,17 @@ li strong { color: #0B0E13; }
 
 /* ══════════ REPORT FOOTER ══════════ */
 .report-footer {
-  background: #0B0E13; margin-top: 48px;
+  background: var(--eiq-ink); margin-top: 48px;
   padding: 18px 44px;
   display: flex; justify-content: space-between; align-items: center;
 }
 .footer-logo { font-size: 14pt; font-weight: 800; color: white; letter-spacing: -0.5px; }
-.footer-logo span { color: #00B876; }
-.footer-tagline { font-size: 8pt; color: #4B5563; font-style: italic; margin-top: 3px; }
-.footer-right { text-align: right; font-size: 8pt; color: #4B5563; line-height: 1.8; }
+.footer-logo span { color: var(--eiq-accent); }
+.footer-tagline { font-size: 8pt; color: var(--eiq-gray-500); font-style: italic; margin-top: 3px; }
+.footer-right { text-align: right; font-size: 8pt; color: var(--eiq-gray-500); line-height: 1.8; }
 .footer-disclaimer {
-  font-size: 7pt; color: #6B7280; padding: 10px 44px;
-  border-top: 1px solid #1F2937; background: #0B0E13; text-align: center;
+  font-size: 7pt; color: var(--eiq-gray-400); padding: 10px 44px;
+  border-top: 1px solid var(--eiq-ink-mid); background: var(--eiq-ink); text-align: center;
 }
 
 /* ══════════ PRINT ══════════ */
@@ -412,7 +430,7 @@ ${coverHtml}
 
 <!-- ══ REPORT HEADER (page 2+) ══ -->
 <div class="report-header">
-  <div class="report-header-logo">Elevator<span>IQ</span></div>
+  <div class="report-header-logo">${logoWordmarkHtml('report-header-wordmark')}</div>
   <div class="report-header-right">
     ${escapeHtml(label)}<br/>
     ${escapeHtml(date)}
@@ -428,11 +446,11 @@ ${coverHtml}
 <!-- ══ REPORT FOOTER ══ -->
 <div class="report-footer">
   <div>
-    <div class="footer-logo">Elevator<span>IQ</span></div>
-    <div class="footer-tagline">"Upload. Analyze. Decide."</div>
+    <div class="footer-logo">${logoWordmarkHtml('report-footer-wordmark')}</div>
+    <div class="footer-tagline">${escapeHtml(BRAND.footerTagline)}</div>
   </div>
   <div class="footer-right">
-    elevatoriq.ai &nbsp;·&nbsp; Independent Elevator Intelligence<br/>
+    ${escapeHtml(BRAND.domain)} &nbsp;·&nbsp; Independent Elevator Intelligence<br/>
     Secure · Confidential · No Vendor Affiliations
   </div>
 </div>
@@ -463,8 +481,8 @@ async function generatePDF(reportBody, caseId, reviewType, downloadUrl) {
       printBackground: true,
       displayHeaderFooter: true,
       headerTemplate: '<div></div>',
-      footerTemplate: `<div style="width:100%; font-size:7pt; color:#9CA3AF; display:flex; justify-content:space-between; padding:0 44px; font-family:Helvetica,Arial,sans-serif; box-sizing:border-box;">
-        <span>ElevatorIQ &mdash; Confidential</span>
+      footerTemplate: `<div style="width:100%; font-size:7pt; color:${COLORS.gray300}; display:flex; justify-content:space-between; padding:0 44px; font-family:${TYPOGRAPHY.sans}; box-sizing:border-box;">
+        <span>${BRAND.name} &mdash; Confidential</span>
         <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
       </div>`,
     });
@@ -476,8 +494,8 @@ async function generatePDF(reportBody, caseId, reviewType, downloadUrl) {
 
 async function generateAndUploadPDF(reportBody, caseId, reviewType, downloadToken) {
   const downloadUrl = downloadToken
-    ? `https://elevatoriq.ai/api/reports/download/${downloadToken}`
-    : 'https://elevatoriq.ai';
+    ? `https://${BRAND.domain}/api/reports/download/${downloadToken}`
+    : `https://${BRAND.domain}`;
   const pdf = await generatePDF(reportBody, caseId, reviewType, downloadUrl);
   const key = `reports/${caseId}.pdf`;
   await storageService.uploadBuffer(pdf, key, 'application/pdf');

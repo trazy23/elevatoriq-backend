@@ -1,4 +1,5 @@
 const { Resend } = require('resend');
+const { BRAND } = require('./reportBranding');
 require('dotenv').config();
 
 const resend = new Resend(process.env.EMAIL_PROVIDER_API_KEY);
@@ -7,10 +8,10 @@ const resend = new Resend(process.env.EMAIL_PROVIDER_API_KEY);
  * sendReport — Email PDF via Resend SDK
  */
 async function sendReport(toEmail, pdfBuffer, reviewType, downloadToken) {
-  const downloadUrl = `https://elevatoriq.ai/api/reports/download/${downloadToken}`;
+  const downloadUrl = `https://${BRAND.domain}/api/reports/download/${downloadToken}`;
   const reviewLabel = reviewType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   
-  const fromEmail = process.env.FROM_EMAIL || 'reports@elevatoriq.ai';
+  const fromEmail = process.env.FROM_EMAIL || BRAND.reportsFromEmail;
 
   if (!process.env.EMAIL_PROVIDER_API_KEY) {
     throw new Error('EMAIL_PROVIDER_API_KEY not configured');

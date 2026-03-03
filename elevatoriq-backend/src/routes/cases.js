@@ -2,6 +2,16 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { addJob } = require('../workers/analysisWorker');
+const { getStructuredReportKey } = require('../utils/reportArtifacts');
+const { inferReviewTypeFromDocuments } = require('../services/documentTypeService');
+
+function normalizeEmail(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return null;
+  return trimmed.toLowerCase();
+}
 
 function getModule(review_type) {
   if (review_type === 'invoice_review') return 'A';
@@ -13,14 +23,33 @@ function getModule(review_type) {
 // POST /api/cases — Create a case
 router.post('/', async (req, res) => {
   try {
-    const { customer_id, review_type, state, market, equipment_type, customer_email } = req.body;
-    if (!review_type) return res.status(400).json({ error: 'review_type is required' });
+    const {
+      customer_id,
+      review_type,
+      state,
+      market,
+      equipment_type,
+      customer_email,
+      request_email,
+      uploaded_request_email,
+      requester_email,
+      from_email,
+      email,
+    } = req.body;
+    const resolvedRecipientEmail =
+      normalizeEmail(customer_email)
+      || normalizeEmail(request_email)
+      || normalizeEmail(uploaded_request_email)
+      || normalizeEmail(requester_email)
+      || normalizeEmail(from_email)
+      || normalizeEmail(email);
+    const normalizedReviewType = review_type || 'auto';
 
-    const module = getModule(review_type);
+    const module = getModule(normalizedReviewType === 'auto' ? 'contract_coverage' : normalizedReviewType);
     const result = await db.query(
       `INSERT INTO cases (customer_id, review_type, module, state, market, equipment_type, customer_email)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [customer_id || null, review_type, module, state, market, equipment_type, customer_email]
+      [customer_id || null, normalizedReviewType, module, state, market, equipment_type, resolvedRecipientEmail]
     );
     res.json({ case_id: result.rows[0].id, status: 'pending' });
   } catch (err) {
@@ -39,10 +68,20 @@ router.post('/:id/run', async (req, res) => {
     const docs = await db.query('SELECT * FROM documents WHERE case_id=$1', [id]);
     if (!docs.rows.length) return res.status(400).json({ error: 'No documents uploaded for this case' });
 
+    let resolvedReviewType = caseRow.rows[0].review_type;
+    if (!resolvedReviewType || resolvedReviewType === 'auto') {
+      resolvedReviewType = inferReviewTypeFromDocuments(docs.rows);
+      const resolvedModule = getModule(resolvedReviewType);
+      await db.query(
+        `UPDATE cases SET review_type=$2, module=$3 WHERE id=$1`,
+        [id, resolvedReviewType, resolvedModule]
+      );
+    }
+
     await db.query(`UPDATE cases SET status='processing' WHERE id=$1`, [id]);
     await addJob(id);
 
-    res.json({ case_id: id, status: 'processing', message: 'Analysis queued' });
+    res.json({ case_id: id, status: 'processing', review_type: resolvedReviewType, message: 'Analysis queued' });
   } catch (err) {
     console.error('POST /cases/:id/run error:', err);
     res.status(500).json({ error: 'Failed to queue analysis' });
@@ -61,6 +100,70 @@ router.get('/:id/status', async (req, res) => {
   } catch (err) {
     console.error('GET /cases/:id/status error:', err);
     res.status(500).json({ error: 'Failed to get status' });
+  }
+});
+
+// GET /api/cases/:id/output — Structured output metadata for completed workflows
+router.get('/:id/output', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const caseResult = await db.query(
+      'SELECT id, review_type, status, customer_email, created_at, completed_at FROM cases WHERE id=$1',
+      [id]
+    );
+    if (!caseResult.rows.length) return res.status(404).json({ error: 'Case not found' });
+
+    const [documentsResult, reportResult, extractionResult] = await Promise.all([
+      db.query(
+        `SELECT id, file_name, file_type, storage_path, uploaded_at
+         FROM documents
+         WHERE case_id=$1
+         ORDER BY uploaded_at ASC`,
+        [id]
+      ),
+      db.query(
+        `SELECT id, storage_path, download_token, token_expires_at, emailed_at, created_at
+         FROM reports
+         WHERE case_id=$1
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [id]
+      ),
+      db.query(
+        `SELECT id, module, benchmark_version, confidence_overall, raw_json, created_at
+         FROM extractions_raw
+         WHERE case_id=$1
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [id]
+      ),
+    ]);
+
+    const latestReport = reportResult.rows[0] || null;
+    const latestExtraction = extractionResult.rows[0] || null;
+
+    res.json({
+      case: caseResult.rows[0],
+      artifacts: {
+        report_pdf_path: latestReport?.storage_path || null,
+        report_download_path: latestReport?.download_token ? `/api/reports/download/${latestReport.download_token}` : null,
+        report_email_recipient: caseResult.rows[0].customer_email || null,
+        structured_report_path: getStructuredReportKey(id),
+      },
+      documents: documentsResult.rows,
+      extraction: latestExtraction ? {
+        extraction_id: latestExtraction.id,
+        module: latestExtraction.module,
+        benchmark_version: latestExtraction.benchmark_version,
+        confidence_overall: latestExtraction.confidence_overall,
+        raw_json: latestExtraction.raw_json,
+        created_at: latestExtraction.created_at,
+      } : null,
+    });
+  } catch (err) {
+    console.error('GET /cases/:id/output error:', err);
+    res.status(500).json({ error: 'Failed to get case output metadata' });
   }
 });
 

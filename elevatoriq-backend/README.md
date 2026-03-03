@@ -48,9 +48,13 @@ npm run dev
 | `SMTP_HOST` | SMTP host (default: smtp.sendgrid.net) |
 | `SMTP_PORT` | SMTP port (default: 587) |
 | `SMTP_USER` | SMTP username (default: apikey for SendGrid) |
-| `FROM_EMAIL` | Sender email address |
+| `FROM_EMAIL` | Sender email address (default/recommended: `reports@elevatoriq.ai`) |
 | `REDIS_HOST` | Redis host for Bull queue (default: 127.0.0.1) |
 | `PORT` | Server port (default: 3001) |
+| `FRONTEND_ORIGIN` | Canonical frontend origin for CORS (e.g. https://elevatoriq.ai) |
+| `API_ORIGIN` | Canonical API origin for CORS (e.g. https://api.elevatoriq.ai) |
+| `CORS_ORIGINS` | Optional comma-separated additional CORS origins |
+| `FRONTEND_DIST_PATH` | Optional static bundle path when serving SPA from backend host |
 | `PARSER_API_ENABLED` | Feature flag for parser API consumer integration (default: false) |
 | `PARSER_API_BASE_URL` | Parser API base URL (default: http://localhost:3001) |
 | `PARSER_API_TIMEOUT_MS` | Parser API timeout in ms (default: 30000) |
@@ -62,12 +66,16 @@ npm run dev
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/cases` | Create a new analysis case |
-| POST | `/api/cases/:id/documents` | Upload a document |
+| POST | `/api/cases/:id/documents` | Upload a single document |
+| POST | `/api/cases/:id/documents/batch` | Upload multiple documents in one request (`files[]`) |
 | POST | `/api/cases/:id/run` | Trigger analysis |
 | GET | `/api/cases/:id/status` | Poll case status |
+| GET | `/api/cases/:id/output` | Return report/output artifact metadata (PDF + structured JSON path + extraction payload) |
 | GET | `/api/reports/download/:token` | Download PDF report |
 | POST | `/api/invoice/parse` | Upload PDF invoice and extract structured fields |
-| GET | `/health` | Health check |
+| POST | `/api/prompt` | End-to-end orchestration (supports multi-doc `file`/`files`, accepts `review_type` or `function_mode`, recipient resolution prefers `customer_email` then falls back to request email fields) |
+| GET | `/health` | Liveness check |
+| GET | `/readyz` | Readiness check (env + static bundle + CORS summary) |
 
 ## Invoice Parse API (Sprint 001)
 

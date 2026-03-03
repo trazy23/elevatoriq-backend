@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="540" height="120" viewBox="0 0 540 120" role="img" aria-labelledby="title desc">
+  <title id="title">ElevatorIQ temporary wordmark placeholder</title>
+  <desc id="desc">Recreated temporary logo from frontend style tokens. Replace with official ElevatorIQ logo asset.</desc>
+  <rect width="540" height="120" fill="#0B0E13" rx="12" />
+  <g transform="translate(24,24)">
+    <rect x="300" y="6" width="22" height="70" rx="4" fill="#00B876" fill-opacity="0.85" />
+    <rect x="332" y="24" width="22" height="52" rx="4" fill="#00B876" fill-opacity="0.4" />
+    <rect x="306" y="6" width="8" height="30" rx="2" fill="#00B876" fill-opacity="0.5" />
+  </g>
+  <text x="24" y="76" fill="#FFFFFF" font-size="58" font-family="'DM Sans', Arial, sans-serif" font-weight="700" letter-spacing="-1.2">Elevator</text>
+  <text x="270" y="76" fill="#00B876" font-size="58" font-family="'DM Sans', Arial, sans-serif" font-weight="700" letter-spacing="-1.2">IQ</text>
+</svg>

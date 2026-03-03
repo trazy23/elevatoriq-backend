@@ -1,18 +1,32 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
+const fs = require('fs');
 
 const app = express();
 
-// CORS — allow elevatoriq.ai frontend and API subdomain
+function parseCsvEnv(value = '') {
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+const allowedOrigins = Array.from(new Set([
+  ...parseCsvEnv(process.env.CORS_ORIGINS),
+  process.env.FRONTEND_ORIGIN,
+  process.env.API_ORIGIN,
+  'https://elevatoriq.ai',
+  'https://api.elevatoriq.ai',
+  'http://api.elevatoriq.ai',
+  'http://localhost:3000',
+  'http://localhost:5173',
+].filter(Boolean)));
+
+// CORS
 app.use(cors({
-  origin: [
-    'https://elevatoriq.ai',
-    'https://api.elevatoriq.ai',
-    'http://api.elevatoriq.ai',
-    'http://localhost:3000', // local dev
-    'http://localhost:5173', // Vite dev
-  ],
+  origin: allowedOrigins,
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
@@ -20,19 +34,13 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve frontend static files
-const path = require('path');
-const distPath = '/root/elevatoriq-dist';  // Hardcoded for production
+const distPath = process.env.FRONTEND_DIST_PATH || '/root/elevatoriq-dist';
+const hasDist = fs.existsSync(distPath);
+
 console.log(`[init] Serving static files from: ${distPath}`);
-try {
-  if (require('fs').existsSync(distPath)) {
-    app.use(express.static(distPath));
-    console.log('[init] Static files configured successfully');
-  } else {
-    console.warn('[init] WARNING: dist path does not exist:', distPath);
-  }
-} catch (err) {
-  console.error('[init] Error checking dist path:', err.message);
+console.log(`[init] Static dist present: ${hasDist}`);
+if (hasDist) {
+  app.use(express.static(distPath));
 }
 
 // Routes
@@ -48,9 +56,54 @@ app.use('/api/reports', reportsRouter);
 app.use('/api/prompt', promptRouter);
 app.use('/api/invoice', invoiceRouter);
 
-// Health check
+// Health checks
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'ElevatorIQ Backend', version: '1.1' });
+  res.json({ status: 'ok', service: 'ElevatorIQ Backend', version: '1.2.0' });
+});
+
+app.get('/readyz', (req, res) => {
+  const requiredForCoreApi = [
+    'DATABASE_URL',
+    // Backward-compat for legacy env naming in existing deployments
+    ...(process.env.DATABASE_URL ? [] : ['DATABASE_URL_']),
+  ];
+
+  const requiredForFullPipeline = [
+    'ANTHROPIC_API_KEY',
+    'AWS_BUCKET',
+    'AWS_REGION',
+    'AWS_ACCESS_KEY_ID',
+    'AWS_SECRET_ACCESS_KEY',
+    'EMAIL_PROVIDER_API_KEY',
+    'FROM_EMAIL',
+    'REDIS_HOST',
+  ];
+
+  const missingCore = requiredForCoreApi.filter((key) => !process.env[key]);
+  const missingFull = requiredForFullPipeline.filter((key) => !process.env[key]);
+
+  const ready = missingCore.length === 0;
+  const fullPipelineReady = ready && missingFull.length === 0;
+
+  res.status(ready ? 200 : 503).json({
+    status: ready ? 'ready' : 'not_ready',
+    full_pipeline_status: fullPipelineReady ? 'ready' : 'degraded',
+    checks: {
+      core_api: {
+        required: requiredForCoreApi,
+        missing: missingCore,
+      },
+      full_pipeline: {
+        required: requiredForFullPipeline,
+        missing: missingFull,
+      },
+      frontend_static: {
+        dist_path: distPath,
+        available: hasDist,
+      },
+      cors_origins: allowedOrigins,
+    },
+  });
 });
 
 // SPA fallback — serve index.html for client-side routes (MUST be after API routes)
@@ -58,7 +111,12 @@ app.use((req, res) => {
   if (req.path.startsWith('/api')) {
     return res.status(404).json({ error: 'API route not found' });
   }
-  const indexPath = '/root/elevatoriq-dist/index.html';
+
+  if (!hasDist) {
+    return res.status(404).json({ error: 'Frontend bundle unavailable on API host' });
+  }
+
+  const indexPath = path.join(distPath, 'index.html');
   res.sendFile(indexPath, (err) => {
     if (err) {
       console.error('[SPA fallback] Error serving index.html:', err.message);
@@ -82,5 +140,6 @@ if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`[ElevatorIQ] Backend running on port ${PORT}`);
     console.log(`[ElevatorIQ] Health: http://localhost:${PORT}/health`);
+    console.log(`[ElevatorIQ] Readyz: http://localhost:${PORT}/readyz`);
   });
 }
