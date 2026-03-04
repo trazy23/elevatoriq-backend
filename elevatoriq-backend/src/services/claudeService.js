@@ -232,12 +232,18 @@ After your structured report, output the data extraction section:
 
 Replace the JSON placeholder with actual extracted data from the documents. Valid JSON only. No markdown. No code fences.`;
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 8000,
-    system: systemPrompt,
-    messages: [{ role: 'user', content: userPrompt }],
-  });
+  const timeoutMs = Number(process.env.CLAUDE_TIMEOUT_MS || 120000);
+  const response = await Promise.race([
+    client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 8000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    }),
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`Claude request timed out after ${timeoutMs}ms`)), timeoutMs);
+    }),
+  ]);
 
   const raw = response.content[0].text;
   const splitMarker = '---EXTRACTION_JSON---';
