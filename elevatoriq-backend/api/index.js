@@ -34,6 +34,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'ElevatorIQ Backend', version: '1.1' });
 });
 
+// Readiness check
+app.get('/readyz', (req, res) => {
+  res.json({ status: 'ready', service: 'ElevatorIQ Backend', version: '1.1' });
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
