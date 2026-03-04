@@ -25,8 +25,7 @@ async function extractTextFromBuffer(buffer, ext, fileName = '') {
       return await extractDOCX(buffer);
     }
     if (ext === '.doc') {
-      // mammoth handles some .doc files; falls back gracefully
-      return await extractDOCX(buffer);
+      return extractLegacyDOC(buffer);
     }
     // Unknown extension — try PDF first, then plain text
     try {
@@ -74,6 +73,23 @@ async function extractDOCX(buffer) {
   }
 
   return `[DOCX Document]\n\n${text}`;
+}
+
+function extractLegacyDOC(buffer) {
+  // Legacy .doc (CFB) can hang/perform poorly in DOCX parsers.
+  // Use a resilient plain-text fallback so pipeline can continue.
+  const text = buffer
+    .toString('latin1')
+    .replace(/[^\x20-\x7E\n\r\t]/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  if (!text || text.length < 20) {
+    throw new Error('DOC appears empty — no extractable text found');
+  }
+
+  return `[DOC Legacy Document]\n\n${text.slice(0, 120000)}`;
 }
 
 /**
