@@ -89,7 +89,8 @@ function extractLegacyDOC(buffer) {
     throw new Error('DOC appears empty — no extractable text found');
   }
 
-  return `[DOC Legacy Document]\n\n${text.slice(0, 120000)}`;
+  // Keep prompt payload bounded for reliable model latency.
+  return `[DOC Legacy Document]\n\n${text.slice(0, 12000)}`;
 }
 
 /**
