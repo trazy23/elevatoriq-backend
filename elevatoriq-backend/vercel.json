@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/[...slug].js": {
+    "api/index.js": {
       "maxDuration": 60,
       "memory": 1024
     }
@@ -8,15 +8,15 @@
   "routes": [
     {
       "src": "^/api/.*",
-      "dest": "api/[...slug].js"
+      "dest": "api/index.js"
     },
     {
       "src": "^/health.*",
-      "dest": "api/[...slug].js"
+      "dest": "api/index.js"
     },
     {
       "src": "^/readyz.*",
-      "dest": "api/[...slug].js"
+      "dest": "api/index.js"
     }
   ]
 }
