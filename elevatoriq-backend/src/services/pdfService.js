@@ -1,4 +1,5 @@
 const puppeteer = require('puppeteer');
+const PDFDocument = require('pdfkit');
 const QRCode = require('qrcode');
 const storageService = require('./storageService');
 const { BRAND, COLORS, TYPOGRAPHY, logoWordmarkHtml } = require('./reportBranding');
@@ -465,17 +466,62 @@ ${coverHtml}
 
 // ─── PDF generation ───────────────────────────────────────────────────────────
 
+function stripForPlainText(raw) {
+  return String(raw || '')
+    .replace(/^═{6,}.*$/gm, '')
+    .replace(/^SECTION\s+\d+\s*[—-]\s*/gm, '\nSECTION: ')
+    .replace(/^\[(HIGH|MEDIUM|LOW)\]\s*/gm, '$1: ')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .trim();
+}
+
+function generateFallbackPDF(reportBody, reviewType, downloadUrl) {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ size: 'LETTER', margin: 50 });
+      const chunks = [];
+      doc.on('data', (c) => chunks.push(c));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const label = REVIEW_LABELS[reviewType] || reviewType;
+      doc.fontSize(20).text(BRAND.name, { align: 'left' });
+      doc.moveDown(0.3);
+      doc.fontSize(11).fillColor('#666666').text(BRAND.tagline);
+      doc.moveDown();
+      doc.fillColor('#000000').fontSize(16).text('Independent Analysis Report');
+      doc.fontSize(12).text(label);
+      doc.fontSize(10).fillColor('#666666').text(new Date().toLocaleString());
+      doc.moveDown();
+      doc.fillColor('#000000').fontSize(11).text('Secure download URL:');
+      doc.fillColor('#1f2937').fontSize(10).text(downloadUrl);
+      doc.moveDown();
+      doc.fillColor('#000000').fontSize(11).text('Report Body');
+      doc.moveDown(0.3);
+      doc.fontSize(10).fillColor('#111111').text(stripForPlainText(reportBody), {
+        width: 500,
+        align: 'left',
+      });
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 async function generatePDF(reportBody, caseId, reviewType, downloadUrl) {
   const html = await wrapInHTML(reportBody, reviewType, downloadUrl);
-  const browser = await puppeteer.launch({
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    timeout: 60000,
-    protocolTimeout: 180000,
-  });
+  let browser;
   try {
+    browser = await puppeteer.launch({
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      timeout: 60000,
+      protocolTimeout: 180000,
+    });
+
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'networkidle0', timeout: 60000 });
-    const pdf = await page.pdf({
+    return await page.pdf({
       format: 'Letter',
       margin: { top: '0.4in', bottom: '0.6in', left: '0.4in', right: '0.4in' },
       printBackground: true,
@@ -486,9 +532,13 @@ async function generatePDF(reportBody, caseId, reviewType, downloadUrl) {
         <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
       </div>`,
     });
-    return pdf;
+  } catch (err) {
+    console.warn('[PDF] Puppeteer unavailable; using fallback renderer:', err.message);
+    return generateFallbackPDF(reportBody, reviewType, downloadUrl);
   } finally {
-    await browser.close();
+    if (browser) {
+      await browser.close();
+    }
   }
 }
 
