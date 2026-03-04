@@ -5,13 +5,24 @@ const db = require('../db');
 const storageService = require('../services/storageService');
 const { detectDocumentType } = require('../services/documentTypeService');
 
+const path = require('path');
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 15 * 1024 * 1024 }, // 15MB
   fileFilter: (req, file, cb) => {
-    const allowed = ['application/pdf', 'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    if (allowed.includes(file.mimetype)) return cb(null, true);
+    const allowedMimes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/octet-stream', // some clients send legacy docs as generic binary
+    ];
+    const ext = (path.extname(file.originalname || '') || '').toLowerCase();
+    const allowedExts = ['.pdf', '.doc', '.docx'];
+
+    if (allowedMimes.includes(file.mimetype) && allowedExts.includes(ext)) return cb(null, true);
+    if (allowedExts.includes(ext)) return cb(null, true); // extension fallback
+
     cb(new Error('Unsupported file type. PDF, DOC, DOCX only.'));
   }
 });
