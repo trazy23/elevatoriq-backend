@@ -208,14 +208,46 @@ Produce a thorough structured analysis with clear sections: Executive Summary, F
 
 // ─── Main analyze function ────────────────────────────────────────────────────
 
+function condenseDocumentText(documentText, maxChars = 18000) {
+  const text = String(documentText || '');
+  if (text.length <= maxChars) return text;
+
+  const lines = text.split('\n');
+  const prioritized = [];
+  const important = /(\$|\bUSD\b|%|\bprice\b|\bcost\b|\bwarranty\b|\bscope\b|\bexclude|\binclud|\blead time\b|\bschedule\b|\bterm\b|\bescalat)/i;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (important.test(trimmed) || (/^[A-Z0-9 \-:]{6,}$/.test(trimmed) && trimmed.length < 120)) {
+      prioritized.push(trimmed);
+    }
+  }
+
+  const head = text.slice(0, 5000);
+  const tail = text.slice(-3000);
+  const mid = prioritized.join('\n').slice(0, 10000);
+
+  return [
+    '[DOCUMENT CONDENSED FOR ANALYSIS]',
+    '--- HEAD ---',
+    head,
+    '--- KEY EXCERPTS ---',
+    mid,
+    '--- TAIL ---',
+    tail,
+  ].join('\n');
+}
+
 async function analyze(documentText, reviewType, benchmarkContext) {
   const systemPrompt = getRulebook();
   const reportTemplate = getReportTemplate(reviewType);
+  const condensedText = condenseDocumentText(documentText);
 
   const userPrompt = `${benchmarkContext ? benchmarkContext + '\n\n' : ''}Review Type: ${reviewType}
 
 DOCUMENTS SUBMITTED FOR ANALYSIS:
-${documentText}
+${condensedText}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -248,10 +280,8 @@ Replace the JSON placeholder with actual extracted data from the documents. Vali
     ]);
     raw = response.content[0].text;
   } catch (err) {
-    console.warn('[Claude] Primary analysis failed, using fallback report:', err.message);
-    const preview = String(documentText || '').slice(0, 6000);
-    const fallbackReport = `SECTION 1 — EXECUTIVE SUMMARY\nAutomated fallback report generated because model analysis timed out. The uploaded document was processed and delivered to keep workflow continuity.\n\nSECTION 2 — DOCUMENT PREVIEW\n${preview}\n\nSECTION 3 — NEXT STEPS\n1) Re-run detailed analysis with extended timeout.\n2) Split very large documents into smaller sections if needed.\n3) Validate scope/pricing details manually against source doc.`;
-    return { reportBody: fallbackReport, extractionJson: null };
+    console.warn('[Claude] Analysis failed:', err.message);
+    throw err;
   }
   const splitMarker = '---EXTRACTION_JSON---';
   const splitIndex = raw.indexOf(splitMarker);

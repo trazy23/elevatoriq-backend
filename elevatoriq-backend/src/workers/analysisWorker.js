@@ -155,6 +155,14 @@ async function saveFactTables(extractionId, json) {
   }
 }
 
+function isReportDeliverable(reportBody = '') {
+  const text = String(reportBody || '');
+  const hasSections = /SECTION\s+1/i.test(text) && /SECTION\s+2/i.test(text);
+  const hasDecisionSignals = /(Recommendation|Risk|Assessment|Bottom Line)/i.test(text);
+  const looksLikeFallback = /DOCUMENT PREVIEW|Automated fallback report/i.test(text);
+  return hasSections && hasDecisionSignals && !looksLikeFallback && text.length > 1200;
+}
+
 async function persistStructuredReport(caseId, caseRow, docs, analysisResult, extractionId) {
   const payload = {
     case_id: caseId,
@@ -211,6 +219,10 @@ async function processCase(caseId) {
     const analysisResult = await claudeService.analyze(
       combinedText, caseRow.review_type, benchmarks
     );
+
+    if (!isReportDeliverable(analysisResult.reportBody)) {
+      throw new Error('Analysis output failed deliverable quality gate');
+    }
 
     // 6. Validate + save extraction (non-blocking on failure)
     let extractionId = null;
