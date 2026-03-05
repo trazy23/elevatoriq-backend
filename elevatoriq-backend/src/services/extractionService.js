@@ -23,26 +23,50 @@ function withTimeout(promise, ms, label) {
   ]);
 }
 
+function plainTextFallback(buffer, label) {
+  const text = buffer
+    .toString('latin1')
+    .replace(/[^\x20-\x7E\n\r\t]/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  const usable = text.replace(/\s+/g, '').length;
+  if (usable < 50) throw new Error(`Plain-text fallback for ${label} produced no usable content`);
+  return `[Plain-text extraction]\n\n${text.slice(0, 60000)}`;
+}
+
 async function extractTextFromBuffer(buffer, ext, fileName = '') {
-  try {
-    if (ext === '.pdf') {
-      return await withTimeout(extractPDF(buffer), 20000, 'PDF extraction');
-    }
-    if (ext === '.docx') {
-      return await withTimeout(extractDOCX(buffer), 20000, 'DOCX extraction');
-    }
-    if (ext === '.doc') {
-      return extractLegacyDOC(buffer);
-    }
-    // Unknown extension — try PDF first, then plain text
+  // PDF path — with silent fallback for cupsfilter/low-fidelity PDFs
+  if (ext === '.pdf') {
     try {
-      return await extractPDF(buffer);
-    } catch {
-      return buffer.toString('utf8').replace(/[^\x20-\x7E\n\r\t]/g, ' ').trim();
+      const result = await withTimeout(extractPDF(buffer), 20000, 'PDF extraction');
+      const usable = result.replace(/\s+/g, '').length;
+      if (usable >= 100) return result;
+      console.warn(`[Extraction] PDF text too sparse (${usable} chars), trying plain-text fallback`);
+    } catch (err) {
+      console.warn(`[Extraction] PDF extraction failed (${err.message}), trying plain-text fallback`);
     }
-  } catch (err) {
-    console.error(`[Extraction] Failed for ${fileName}:`, err.message);
-    return `[EXTRACTION FAILED: ${fileName} — ${err.message}]`;
+    return plainTextFallback(buffer, fileName);
+  }
+
+  if (ext === '.docx') {
+    try {
+      return await withTimeout(extractDOCX(buffer), 20000, 'DOCX extraction');
+    } catch (err) {
+      console.warn(`[Extraction] DOCX extraction failed (${err.message}), trying plain-text fallback`);
+      return plainTextFallback(buffer, fileName);
+    }
+  }
+
+  if (ext === '.doc') {
+    return extractLegacyDOC(buffer);
+  }
+
+  // Unknown extension — try PDF, then plain text
+  try {
+    return await withTimeout(extractPDF(buffer), 20000, 'PDF extraction (unknown ext)');
+  } catch {
+    return plainTextFallback(buffer, fileName);
   }
 }
 
