@@ -16,13 +16,20 @@ async function extractTextFromStorage(storagePath) {
 /**
  * Extract text directly from a buffer (e.g. freshly uploaded file in memory).
  */
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)),
+  ]);
+}
+
 async function extractTextFromBuffer(buffer, ext, fileName = '') {
   try {
     if (ext === '.pdf') {
-      return await extractPDF(buffer);
+      return await withTimeout(extractPDF(buffer), 20000, 'PDF extraction');
     }
     if (ext === '.docx') {
-      return await extractDOCX(buffer);
+      return await withTimeout(extractDOCX(buffer), 20000, 'DOCX extraction');
     }
     if (ext === '.doc') {
       return extractLegacyDOC(buffer);
