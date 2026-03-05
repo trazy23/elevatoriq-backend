@@ -288,7 +288,8 @@ function parseAnalysisResponse(raw) {
 async function analyze(documentText, reviewType, benchmarkContext) {
   const systemPrompt = getRulebook();
   const reportTemplate = getReportTemplate(reviewType);
-  const timeoutMs = Number(process.env.CLAUDE_TIMEOUT_MS || 240000);
+  const configuredTimeoutMs = Number(process.env.CLAUDE_TIMEOUT_MS || 240000);
+  const timeoutMs = Number.isFinite(configuredTimeoutMs) ? Math.max(configuredTimeoutMs, 240000) : 240000;
 
   const { preparedText, usedChunking, chunkCount } = await buildAnalysisInput(documentText, timeoutMs);
 
