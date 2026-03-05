@@ -208,51 +208,105 @@ Produce a thorough structured analysis with clear sections: Executive Summary, F
 
 // ─── Main analyze function ────────────────────────────────────────────────────
 
-function condenseDocumentText(documentText, maxChars = 18000) {
+function chunkText(text, chunkSize = Number(process.env.DOC_CHUNK_SIZE_CHARS || 14000), overlap = 1200) {
+  const normalized = String(text || '');
+  if (!normalized) return [];
+
+  const chunks = [];
+  let cursor = 0;
+  while (cursor < normalized.length) {
+    const end = Math.min(cursor + chunkSize, normalized.length);
+    chunks.push(normalized.slice(cursor, end));
+    if (end >= normalized.length) break;
+    cursor = Math.max(0, end - overlap);
+  }
+  return chunks;
+}
+
+async function callClaude({ systemPrompt, userPrompt, maxTokens = 8000, timeoutMs, model = 'claude-sonnet-4-6' }) {
+  return Promise.race([
+    client.messages.create({
+      model,
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    }),
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`Claude request timed out after ${timeoutMs}ms`)), timeoutMs);
+    }),
+  ]);
+}
+
+async function summarizeChunk(chunk, idx, total, timeoutMs) {
+  const prompt = `You are preparing synthesis notes for a final elevator proposal review.\nSummarize this chunk only. Keep concise but specific.\n\nRequired output headings:\n- Commercial terms\n- Scope includes\n- Scope excludes/owner responsibilities\n- Risk signals\n- Timeline/lead time\n- Verbatim snippets (max 5 short quotes)\n\nChunk ${idx + 1} of ${total}:\n${chunk}`;
+
+  const resp = await callClaude({
+    systemPrompt: 'Create factual extraction notes only. No recommendations. No copied long passages.',
+    userPrompt: prompt,
+    timeoutMs,
+    maxTokens: 1800,
+  });
+
+  return resp.content?.[0]?.text?.trim() || '';
+}
+
+async function buildAnalysisInput(documentText, timeoutMs) {
   const text = String(documentText || '');
-  if (text.length <= maxChars) return text;
-
-  const lines = text.split('\n');
-  const prioritized = [];
-  const important = /(\$|\bUSD\b|%|\bprice\b|\bcost\b|\bwarranty\b|\bscope\b|\bexclude|\binclud|\blead time\b|\bschedule\b|\bterm\b|\bescalat)/i;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    if (important.test(trimmed) || (/^[A-Z0-9 \-:]{6,}$/.test(trimmed) && trimmed.length < 120)) {
-      prioritized.push(trimmed);
-    }
+  const longDocThreshold = Number(process.env.LONG_DOC_THRESHOLD_CHARS || 18000);
+  if (text.length <= longDocThreshold) {
+    return { preparedText: text, usedChunking: false, chunkCount: 1 };
   }
 
-  const head = text.slice(0, 5000);
-  const tail = text.slice(-3000);
-  const mid = prioritized.join('\n').slice(0, 10000);
+  const chunks = chunkText(text);
+  const summaries = [];
+  for (let i = 0; i < chunks.length; i += 1) {
+    // Sequential on purpose to avoid Anthropic burst throttling and keep latency bounded.
+    const summary = await summarizeChunk(chunks[i], i, chunks.length, Math.min(timeoutMs, 90000));
+    summaries.push(`## Chunk ${i + 1}\n${summary}`);
+  }
 
-  return [
-    '[DOCUMENT CONDENSED FOR ANALYSIS]',
-    '--- HEAD ---',
-    head,
-    '--- KEY EXCERPTS ---',
-    mid,
-    '--- TAIL ---',
-    tail,
-  ].join('\n');
+  return {
+    preparedText: `[LONG DOCUMENT SYNTHESIS]\nOriginal length: ${text.length} chars\nChunks: ${chunks.length}\n\n${summaries.join('\n\n')}`,
+    usedChunking: true,
+    chunkCount: chunks.length,
+  };
+}
+
+function parseAnalysisResponse(raw) {
+  const splitMarker = '---EXTRACTION_JSON---';
+  const splitIndex = raw.indexOf(splitMarker);
+
+  if (splitIndex === -1) {
+    return { reportBody: raw.replace('---REPORT_BODY---', '').trim(), extractionJson: null };
+  }
+
+  const reportBody = raw.substring(0, splitIndex).replace('---REPORT_BODY---', '').trim();
+  const extractionJson = raw.substring(splitIndex + splitMarker.length).trim();
+  return { reportBody, extractionJson };
 }
 
 async function analyze(documentText, reviewType, benchmarkContext) {
   const systemPrompt = getRulebook();
   const reportTemplate = getReportTemplate(reviewType);
-  const condensedText = condenseDocumentText(documentText);
+  const timeoutMs = Number(process.env.CLAUDE_TIMEOUT_MS || 240000);
+
+  const { preparedText, usedChunking, chunkCount } = await buildAnalysisInput(documentText, timeoutMs);
 
   const userPrompt = `${benchmarkContext ? benchmarkContext + '\n\n' : ''}Review Type: ${reviewType}
 
 DOCUMENTS SUBMITTED FOR ANALYSIS:
-${condensedText}
+${preparedText}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 INSTRUCTIONS:
 ${reportTemplate}
+
+Hard requirements:
+- This must be a synthesized rulebook analysis, not a source-document copy.
+- Do not paste long verbatim text from source docs.
+- Quote only short snippets when needed, then explain implications.
+- Make clear recommendations tied to risk/price/scope tradeoffs.
 
 After your structured report, output the data extraction section:
 
@@ -264,39 +318,21 @@ After your structured report, output the data extraction section:
 
 Replace the JSON placeholder with actual extracted data from the documents. Valid JSON only. No markdown. No code fences.`;
 
-  const timeoutMs = Number(process.env.CLAUDE_TIMEOUT_MS || 120000);
-  let raw;
   try {
-    const response = await Promise.race([
-      client.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 8000,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-      new Promise((_, reject) => {
-        setTimeout(() => reject(new Error(`Claude request timed out after ${timeoutMs}ms`)), timeoutMs);
-      }),
-    ]);
-    raw = response.content[0].text;
+    const response = await callClaude({ systemPrompt, userPrompt, timeoutMs, maxTokens: 8000 });
+    const raw = response.content?.[0]?.text || '';
+    const parsed = parseAnalysisResponse(raw);
+    return {
+      ...parsed,
+      meta: {
+        usedChunking,
+        chunkCount,
+      },
+    };
   } catch (err) {
     console.warn('[Claude] Analysis failed:', err.message);
     throw err;
   }
-  const splitMarker = '---EXTRACTION_JSON---';
-  const splitIndex = raw.indexOf(splitMarker);
-
-  if (splitIndex === -1) {
-    return { reportBody: raw.replace('---REPORT_BODY---', '').trim(), extractionJson: null };
-  }
-
-  const reportBody = raw
-    .substring(0, splitIndex)
-    .replace('---REPORT_BODY---', '')
-    .trim();
-  const extractionJson = raw.substring(splitIndex + splitMarker.length).trim();
-
-  return { reportBody, extractionJson };
 }
 
 function getModule(reviewType) {
@@ -305,4 +341,4 @@ function getModule(reviewType) {
   return 'B';
 }
 
-module.exports = { analyze };
+module.exports = { analyze, __testables: { chunkText, parseAnalysisResponse, buildAnalysisInput } };

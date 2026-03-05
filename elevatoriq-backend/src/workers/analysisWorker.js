@@ -155,12 +155,30 @@ async function saveFactTables(extractionId, json) {
   }
 }
 
-function isReportDeliverable(reportBody = '') {
+function computeVerbatimOverlapScore(sourceText = '', reportBody = '') {
+  const source = String(sourceText || '');
+  const report = String(reportBody || '');
+  if (!source || !report) return 0;
+
+  const candidateLines = report
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length >= 140);
+
+  if (!candidateLines.length) return 0;
+  const copiedLines = candidateLines.filter((line) => source.includes(line)).length;
+  return copiedLines / candidateLines.length;
+}
+
+function isReportDeliverable(reportBody = '', sourceText = '') {
   const text = String(reportBody || '');
   const hasSections = /SECTION\s+1/i.test(text) && /SECTION\s+2/i.test(text);
   const hasDecisionSignals = /(Recommendation|Risk|Assessment|Bottom Line)/i.test(text);
   const looksLikeFallback = /DOCUMENT PREVIEW|Automated fallback report/i.test(text);
-  return hasSections && hasDecisionSignals && !looksLikeFallback && text.length > 1200;
+  const overlapScore = computeVerbatimOverlapScore(sourceText, text);
+  const isLikelySourceCopy = overlapScore > 0.35;
+
+  return hasSections && hasDecisionSignals && !looksLikeFallback && !isLikelySourceCopy && text.length > 1200;
 }
 
 async function persistStructuredReport(caseId, caseRow, docs, analysisResult, extractionId) {
@@ -220,7 +238,7 @@ async function processCase(caseId) {
       combinedText, caseRow.review_type, benchmarks
     );
 
-    if (!isReportDeliverable(analysisResult.reportBody)) {
+    if (!isReportDeliverable(analysisResult.reportBody, combinedText)) {
       throw new Error('Analysis output failed deliverable quality gate');
     }
 
@@ -275,6 +293,29 @@ async function processCase(caseId) {
 
 // Bull queue integration
 let queue = null;
+const WORKER_JOB_TIMEOUT_MS = Number(process.env.WORKER_JOB_TIMEOUT_MS || 15 * 60 * 1000);
+
+function withWorkerTimeout(caseId, work) {
+  return Promise.race([
+    work(),
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`Worker timed out after ${WORKER_JOB_TIMEOUT_MS}ms for case ${caseId}`)), WORKER_JOB_TIMEOUT_MS);
+    }),
+  ]);
+}
+
+async function runCaseWithGuard(caseId) {
+  try {
+    await withWorkerTimeout(caseId, () => processCase(caseId));
+  } catch (err) {
+    console.error(`[Worker] Timeout guard triggered for case ${caseId}:`, err.message);
+    try {
+      await db.query(`UPDATE cases SET status='failed' WHERE id=$1`, [caseId]);
+    } catch (dbErr) {
+      console.error(`[Worker] Failed to mark timed-out case ${caseId} as failed:`, dbErr.message);
+    }
+  }
+}
 
 function initQueue() {
   try {
@@ -283,7 +324,7 @@ function initQueue() {
       redis: { host: process.env.REDIS_HOST || '127.0.0.1', port: 6379 }
     });
     queue.process(async (job) => {
-      await processCase(job.data.caseId);
+      await runCaseWithGuard(job.data.caseId);
     });
     console.log('[Worker] Bull queue initialized');
   } catch (err) {
@@ -295,7 +336,10 @@ function initQueue() {
 async function addJob(caseId) {
   if (queue) {
     try {
-      await queue.add({ caseId }, { attempts: 2, backoff: 5000 });
+      await queue.add(
+        { caseId },
+        { attempts: 2, backoff: 5000, timeout: WORKER_JOB_TIMEOUT_MS, removeOnComplete: true, removeOnFail: 100 }
+      );
       return;
     } catch (err) {
       console.warn('[Worker] Bull queue unavailable, falling back to direct processing:', err.message);
@@ -303,7 +347,11 @@ async function addJob(caseId) {
     }
   }
   // Fallback: process directly (fine for local dev without Redis)
-  setImmediate(() => processCase(caseId));
+  setImmediate(() => {
+    runCaseWithGuard(caseId).catch((err) => {
+      console.error(`[Worker] Unhandled guarded run failure for case ${caseId}:`, err.message);
+    });
+  });
 }
 
 // Only initialize Bull queue if REDIS_ENABLED is explicitly set
@@ -313,4 +361,12 @@ if (process.env.REDIS_ENABLED === 'true') {
   console.log('[Worker] Redis disabled — using direct processing (set REDIS_ENABLED=true to enable queue)');
 }
 
-module.exports = { addJob, processCase };
+module.exports = {
+  addJob,
+  processCase,
+  __testables: {
+    computeVerbatimOverlapScore,
+    isReportDeliverable,
+    withWorkerTimeout,
+  },
+};
