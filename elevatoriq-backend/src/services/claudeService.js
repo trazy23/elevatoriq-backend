@@ -233,19 +233,26 @@ After your structured report, output the data extraction section:
 Replace the JSON placeholder with actual extracted data from the documents. Valid JSON only. No markdown. No code fences.`;
 
   const timeoutMs = Number(process.env.CLAUDE_TIMEOUT_MS || 120000);
-  const response = await Promise.race([
-    client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 8000,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
-    }),
-    new Promise((_, reject) => {
-      setTimeout(() => reject(new Error(`Claude request timed out after ${timeoutMs}ms`)), timeoutMs);
-    }),
-  ]);
-
-  const raw = response.content[0].text;
+  let raw;
+  try {
+    const response = await Promise.race([
+      client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 8000,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error(`Claude request timed out after ${timeoutMs}ms`)), timeoutMs);
+      }),
+    ]);
+    raw = response.content[0].text;
+  } catch (err) {
+    console.warn('[Claude] Primary analysis failed, using fallback report:', err.message);
+    const preview = String(documentText || '').slice(0, 6000);
+    const fallbackReport = `SECTION 1 — EXECUTIVE SUMMARY\nAutomated fallback report generated because model analysis timed out. The uploaded document was processed and delivered to keep workflow continuity.\n\nSECTION 2 — DOCUMENT PREVIEW\n${preview}\n\nSECTION 3 — NEXT STEPS\n1) Re-run detailed analysis with extended timeout.\n2) Split very large documents into smaller sections if needed.\n3) Validate scope/pricing details manually against source doc.`;
+    return { reportBody: fallbackReport, extractionJson: null };
+  }
   const splitMarker = '---EXTRACTION_JSON---';
   const splitIndex = raw.indexOf(splitMarker);
 
