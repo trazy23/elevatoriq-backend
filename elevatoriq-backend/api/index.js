@@ -6,11 +6,25 @@ const app = express();
 
 // CORS — allow elevatoriq.ai frontend
 app.use(cors({
-  origin: [
-    'https://elevatoriq.ai',
-    'http://localhost:3000', // local dev
-    'http://localhost:5173', // Vite dev
-  ],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (curl, mobile, server-to-server)
+    if (!origin) return callback(null, true);
+    const allowed = [
+      'https://elevatoriq.ai',
+      'https://www.elevatoriq.ai',
+    ];
+    // Allow any Vercel preview deployment for this project
+    if (
+      allowed.includes(origin) ||
+      /^https:\/\/elevatoriq(-[a-z0-9]+)*\.vercel\.app$/.test(origin) ||
+      /^https:\/\/treys-projects(-[a-z0-9]+)*\.vercel\.app$/.test(origin) ||
+      origin === 'http://localhost:3000' ||
+      origin === 'http://localhost:5173'
+    ) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS: origin not allowed — ${origin}`));
+  },
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
