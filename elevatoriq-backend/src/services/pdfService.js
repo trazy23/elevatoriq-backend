@@ -1,4 +1,12 @@
-const puppeteer = require('puppeteer');
+let puppeteer;
+let chromium;
+try {
+  chromium = require('@sparticuz/chromium');
+  puppeteer = require('puppeteer-core');
+} catch {
+  puppeteer = require('puppeteer');
+  chromium = null;
+}
 const PDFDocument = require('pdfkit');
 const QRCode = require('qrcode');
 const storageService = require('./storageService');
@@ -509,12 +517,26 @@ function generateFallbackPDF(reportBody, reviewType, downloadUrl) {
   });
 }
 
+async function getBrowserArgs() {
+  if (chromium) {
+    return {
+      args: chromium.args,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    };
+  }
+  return {
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+  };
+}
+
 async function generatePDF(reportBody, caseId, reviewType, downloadUrl) {
   const html = await wrapInHTML(reportBody, reviewType, downloadUrl);
   let browser;
   try {
+    const launchArgs = await getBrowserArgs();
     browser = await puppeteer.launch({
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      ...launchArgs,
       timeout: 60000,
       protocolTimeout: 180000,
     });
