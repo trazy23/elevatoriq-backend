@@ -16,7 +16,6 @@
     "@anthropic-ai/sdk": "^0.78.0",
     "@aws-sdk/client-s3": "^3.995.0",
     "@aws-sdk/s3-request-presigner": "^3.995.0",
-    "@sparticuz/chromium": "^143.0.4",
     "ajv": "^8.18.0",
     "bull": "^4.16.5",
     "cors": "^2.8.6",
@@ -31,7 +30,6 @@
     "pdfkit": "^0.15.2",
     "pg": "^8.18.0",
     "puppeteer": "^24.37.5",
-    "puppeteer-core": "^24.38.0",
     "qrcode": "^1.5.4",
     "resend": "^6.9.2",
     "uuid": "^13.0.0"
