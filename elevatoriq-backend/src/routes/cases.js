@@ -80,14 +80,14 @@ router.post('/:id/run', async (req, res) => {
 
     await db.query(`UPDATE cases SET status='processing' WHERE id=$1`, [id]);
 
-    // On Vercel serverless there is no persistent background process.
-    // Run analysis synchronously within this request so it completes before the
-    // function container exits. maxDuration is 300s which covers all real docs.
+    // Run analysis synchronously BEFORE responding so Vercel keeps the function
+    // alive for the full maxDuration (300s). Frontend is fire-and-forget so
+    // the user never waits on this response.
     const { runCaseWithGuard } = require('../workers/analysisWorker');
+    // Respond immediately so frontend isn't blocked, then await analysis
     res.json({ case_id: id, status: 'processing', review_type: resolvedReviewType, message: 'Analysis queued' });
-    // Fire analysis after response is flushed — node will keep the event loop alive
-    // within the 300s window until runCaseWithGuard resolves.
-    runCaseWithGuard(id).catch((err) => {
+    // Await keeps the Vercel function alive for up to 300s (maxDuration)
+    await runCaseWithGuard(id).catch((err) => {
       console.error(`[Run] Analysis failed for case ${id}:`, err.message);
     });
   } catch (err) {
