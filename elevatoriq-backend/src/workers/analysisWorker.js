@@ -364,6 +364,7 @@ if (process.env.REDIS_ENABLED === 'true') {
 module.exports = {
   addJob,
   processCase,
+  runCaseWithGuard,
   __testables: {
     computeVerbatimOverlapScore,
     isReportDeliverable,
