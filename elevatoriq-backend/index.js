@@ -136,6 +136,7 @@ module.exports = app;
 
 // Listen locally for development
 if (require.main === module) {
+  // Render will set PORT automatically
   const PORT = process.env.PORT || 3001;
   app.listen(PORT, () => {
     console.log(`[ElevatorIQ] Backend running on port ${PORT}`);
