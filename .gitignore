@@ -1,3 +1,5 @@
-openclaw/.env
-openclaw/uploads/*
-openclaw/node_modules/
+node_modules/
+.env
+*.log
+.DS_Store
+.vercel
