@@ -18,6 +18,7 @@ const allowedOrigins = Array.from(new Set([
   process.env.FRONTEND_ORIGIN,
   process.env.API_ORIGIN,
   'https://elevatoriq.ai',
+  'https://www.elevatoriq.ai',
   'https://api.elevatoriq.ai',
   'http://api.elevatoriq.ai',
   'http://localhost:3000',
