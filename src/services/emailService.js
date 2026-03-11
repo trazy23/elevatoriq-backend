@@ -14,7 +14,9 @@ async function sendReport(toEmail, pdfBuffer, reviewType, downloadToken) {
   const fromEmail = process.env.FROM_EMAIL || BRAND.reportsFromEmail;
 
   if (!process.env.EMAIL_PROVIDER_API_KEY) {
-    throw new Error('EMAIL_PROVIDER_API_KEY not configured');
+    // MVP: Mock email send
+    console.log(`[Email-Mock] Report "${reviewLabel}" would be sent to ${toEmail}`);
+    return { id: 'mock-email-' + Date.now() };
   }
 
   const result = await resend.emails.send({

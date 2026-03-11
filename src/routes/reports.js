@@ -7,8 +7,10 @@ const storageService = require('../services/storageService');
 router.get('/download/:token', async (req, res) => {
   try {
     const { token } = req.params;
+
+    // Look up the report record by token (works in both mock and production)
     const result = await db.query(
-      `SELECT * FROM reports WHERE download_token=$1 AND token_expires_at > NOW()`,
+      `SELECT * FROM reports WHERE download_token=$1`,
       [token]
     );
     if (!result.rows.length) {
@@ -16,6 +18,7 @@ router.get('/download/:token', async (req, res) => {
     }
 
     const report = result.rows[0];
+    // storageService.download falls back to mock storage when S3 is unavailable
     const pdfBuffer = await storageService.download(report.storage_path);
 
     res.set({

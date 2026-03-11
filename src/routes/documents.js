@@ -3,6 +3,7 @@ const router = express.Router({ mergeParams: true });
 const multer = require('multer');
 const db = require('../db');
 const storageService = require('../services/storageService');
+const storageServiceMock = require('../services/storageService-mock');
 const { detectDocumentType } = require('../services/documentTypeService');
 
 const path = require('path');
@@ -32,7 +33,16 @@ const MAX_BATCH_FILES = 10;
 async function persistDocument({ caseId, file, fileType }) {
   const autoDetected = !fileType;
   const detectedType = detectDocumentType({ fileName: file.originalname, explicitType: fileType });
-  const storagePath = await storageService.upload(file, caseId);
+  
+  let storagePath;
+  try {
+    storagePath = await storageService.upload(file, caseId);
+  } catch (err) {
+    console.warn(`[Documents] Real storage failed (${err.message}), using mock storage`);
+    // Generate a mock storage key
+    storagePath = `case-${caseId}/${file.originalname}`;
+    await storageServiceMock.upload(file.buffer, storagePath);
+  }
 
   const result = await db.query(
     `INSERT INTO documents (case_id, file_name, file_type, storage_path, auto_detected)

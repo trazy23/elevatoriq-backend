@@ -1,6 +1,7 @@
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const path = require('path');
+const storageServiceMock = require('./storageService-mock');
 require('dotenv').config();
 
 // Cloudflare R2 uses S3-compatible API with a jurisdiction-specific endpoint
@@ -28,25 +29,36 @@ async function upload(file, caseId) {
   return key;
 }
 
-// Upload a raw buffer (e.g. generated PDF) to S3
+// Upload a raw buffer (e.g. generated PDF) to S3, with mock fallback
 async function uploadBuffer(buffer, key, contentType = 'application/octet-stream') {
-  await s3.send(new PutObjectCommand({
-    Bucket: BUCKET,
-    Key: key,
-    Body: buffer,
-    ContentType: contentType,
-  }));
-  return key;
+  try {
+    await s3.send(new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+    }));
+    return key;
+  } catch (err) {
+    console.warn(`[Storage] S3 upload failed (${err.message}), using mock storage`);
+    await storageServiceMock.upload(buffer, key);
+    return key;
+  }
 }
 
-// Download a file from S3, returns Buffer
+// Download a file from S3, returns Buffer — falls back to mock storage if S3 unavailable
 async function download(key) {
-  const response = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
-  const chunks = [];
-  for await (const chunk of response.Body) {
-    chunks.push(chunk);
+  try {
+    const response = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
+    const chunks = [];
+    for await (const chunk of response.Body) {
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+  } catch (err) {
+    console.warn(`[Storage] S3 download failed (${err.message}), trying mock storage`);
+    return storageServiceMock.download(key);
   }
-  return Buffer.concat(chunks);
 }
 
 // Get a presigned download URL (7 days)

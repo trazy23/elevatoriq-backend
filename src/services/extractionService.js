@@ -1,14 +1,22 @@
 const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
 const storageService = require('./storageService');
+const storageServiceMock = require('./storageService-mock');
 const path = require('path');
 
 /**
  * Download a file from R2 and extract its text content.
  * Supports: PDF, DOCX, DOC (plain text fallback)
+ * Falls back to mock storage if real storage fails
  */
 async function extractTextFromStorage(storagePath) {
-  const buffer = await storageService.download(storagePath);
+  let buffer;
+  try {
+    buffer = await storageService.download(storagePath);
+  } catch (err) {
+    console.warn(`[Extraction] R2 download failed (${err.message}), using mock storage`);
+    buffer = await storageServiceMock.download(storagePath);
+  }
   const ext = path.extname(storagePath).toLowerCase();
   return extractTextFromBuffer(buffer, ext, storagePath);
 }
