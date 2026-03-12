@@ -63,4 +63,72 @@ async function sendReport(toEmail, pdfBuffer, reviewType, downloadToken) {
   return result;
 }
 
-module.exports = { sendReport };
+/**
+ * sendSubmissionAlert — Notify the owner when a new submission comes in
+ */
+async function sendSubmissionAlert({ customerEmail, company, reviewType, caseId }) {
+  const notifyEmail = process.env.ADMIN_NOTIFY_EMAIL;
+  if (!notifyEmail) return; // Not configured — skip silently
+
+  const fromEmail = process.env.FROM_EMAIL || BRAND.reportsFromEmail;
+  const reviewLabel = (reviewType || 'auto').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const adminUrl = process.env.BACKEND_URL
+    ? `${process.env.BACKEND_URL}/admin`
+    : 'https://elevatoriq-backend-prod.onrender.com/admin';
+  const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' });
+
+  if (!process.env.EMAIL_PROVIDER_API_KEY) {
+    console.log(`[Alert-Mock] New submission from ${customerEmail} (${reviewLabel})`);
+    return;
+  }
+
+  try {
+    await resend.emails.send({
+      from: fromEmail,
+      to: notifyEmail,
+      subject: `New ElevatorIQ Submission — ${reviewLabel}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+          <div style="background: #0B0E13; padding: 20px 24px; display: flex; align-items: center;">
+            <h2 style="color: white; margin: 0; font-size: 18px;">Elevator<span style="color: #00B876;">IQ</span> <span style="color: #5E6470; font-weight: 400; font-size: 13px;">/ New Submission</span></h2>
+          </div>
+          <div style="padding: 28px; background: #f8f9fa; border: 1px solid #e0e0e0;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <tr>
+                <td style="padding: 8px 0; color: #888; width: 120px;">Email</td>
+                <td style="padding: 8px 0; color: #111; font-weight: 600;">${customerEmail || '(not provided)'}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #888;">Company</td>
+                <td style="padding: 8px 0; color: #111;">${company || '(not provided)'}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #888;">Review Type</td>
+                <td style="padding: 8px 0; color: #111;">${reviewLabel}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #888;">Time</td>
+                <td style="padding: 8px 0; color: #111;">${timestamp} ET</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #888;">Case ID</td>
+                <td style="padding: 8px 0; color: #888; font-family: monospace; font-size: 12px;">${caseId}</td>
+              </tr>
+            </table>
+            <div style="margin-top: 24px; text-align: center;">
+              <a href="${adminUrl}" style="background: #00B876; color: #0B0E13; padding: 11px 24px;
+                 border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 13px;">
+                View in Admin Dashboard
+              </a>
+            </div>
+          </div>
+        </div>
+      `,
+    });
+  } catch (err) {
+    // Non-fatal — log but don't block
+    console.warn('[Alert] Failed to send submission alert:', err.message);
+  }
+}
+
+module.exports = { sendReport, sendSubmissionAlert };

@@ -4,6 +4,7 @@ const db = require('../db');
 const { addJob } = require('../workers/analysisWorker');
 const { getStructuredReportKey } = require('../utils/reportArtifacts');
 const { inferReviewTypeFromDocuments } = require('../services/documentTypeService');
+const { sendSubmissionAlert } = require('../services/emailService');
 
 function normalizeEmail(value) {
   if (typeof value !== 'string') return null;
@@ -74,7 +75,17 @@ router.post('/', async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
       [resolvedCustomerId, normalizedReviewType, module, state, market, equipment_type, resolvedRecipientEmail]
     );
-    res.json({ case_id: result.rows[0].id, status: 'pending' });
+    const caseId = result.rows[0].id;
+
+    // Fire-and-forget owner alert — never blocks the response
+    sendSubmissionAlert({
+      customerEmail: resolvedRecipientEmail,
+      company: normalizedCompany,
+      reviewType: normalizedReviewType,
+      caseId,
+    });
+
+    res.json({ case_id: caseId, status: 'pending' });
   } catch (err) {
     console.error('POST /cases error:', err);
     res.status(500).json({ error: 'Failed to create case' });
