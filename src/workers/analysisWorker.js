@@ -1,6 +1,7 @@
 const db = require('../db');
 const claudeService = require('../services/claudeService');
 const benchmarkService = require('../services/benchmarkService');
+const knowledgeService = require('../services/knowledgeService');
 const pdfService = require('../services/pdfService');
 const emailService = require('../services/emailService');
 const storageService = require('../services/storageService');
@@ -37,10 +38,33 @@ function anonymize(json) {
 }
 
 async function saveExtraction(caseId, result) {
-  // For MVP: skip JSON validation, just store the report body
-  // JSON schema validation can be added later
-  console.log(`[Analysis] Saving report for case ${caseId} (${result.reportBody?.length || 0} chars)`);
-  return { caseId, stored: true };
+  try {
+    const json = JSON.parse(result.extractionJson);
+    const insertResult = await db.query(
+      `INSERT INTO extractions_raw
+       (case_id, module, state, market, equipment_type, contract_type,
+        unit_count, confidence_overall, benchmark_version, raw_json)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       RETURNING id`,
+      [
+        caseId,
+        json.module || null,
+        json.state || null,
+        json.market || null,
+        json.equipment_type || null,
+        json.contract_type || null,
+        json.unit_count || null,
+        json.confidence_overall || null,
+        json.benchmark_version || '1.0',
+        json,
+      ]
+    );
+    console.log(`[Analysis] Extraction saved for case ${caseId}`);
+    return insertResult.rows[0]?.id;
+  } catch (err) {
+    console.warn(`[Analysis] saveExtraction failed for ${caseId}:`, err.message);
+    return null;
+  }
 }
 
 async function saveFactTables(extractionId, json) {
@@ -188,15 +212,17 @@ async function processCase(caseId) {
     console.log(`[Worker] Extracting text from ${docs.rows.length} document(s)`);
     const combinedText = await extractAllDocuments(docs.rows);
 
-    // 4. Get benchmark context
-    const benchmarks = await benchmarkService.getBenchmarkContext(
-      caseRow.state, caseRow.equipment_type
-    );
+    // 4. Get benchmark context + knowledge base context
+    const [benchmarks, knowledge] = await Promise.all([
+      benchmarkService.getBenchmarkContext(caseRow.state, caseRow.equipment_type),
+      knowledgeService.getKnowledgeContext(caseRow.state, caseRow.equipment_type, caseRow.review_type),
+    ]);
+    const contextBlock = [benchmarks, knowledge].filter(Boolean).join('\n\n');
 
     // 5. Call Claude API
     console.log(`[Worker] Calling Claude API for case: ${caseId}`);
     const analysisResult = await claudeService.analyze(
-      combinedText, caseRow.review_type, benchmarks
+      combinedText, caseRow.review_type, contextBlock
     );
 
     // MVP: Skip quality gate - generate report regardless
