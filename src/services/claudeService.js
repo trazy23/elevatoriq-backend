@@ -307,6 +307,7 @@ Hard requirements:
 - Do not paste long verbatim text from source docs.
 - Quote only short snippets when needed, then explain implications.
 - Make clear recommendations tied to risk/price/scope tradeoffs.
+- CRITICAL: Only reference specific state elevator codes (e.g. Michigan Act 227, ASME A17.1 as adopted by a state) if the submitted documents explicitly indicate the project state or jurisdiction. If state cannot be determined from the documents, do not cite state-specific code — reference only general ASME A17.1 or OSHA standards that apply nationally. Never assume a state based on addresses or phone numbers alone.
 
 After your structured report, output the data extraction section:
 
