@@ -27,7 +27,7 @@ Use proper elevator industry terminology throughout.`;
 // ─── Report structure templates by review type ───────────────────────────────
 
 function getReportTemplate(reviewType) {
-  if (reviewType === 'modernization_comparison' || reviewType === 'maintenance_bid_comparison') {
+  if (reviewType === 'bid_comparison' || reviewType === 'modernization_comparison' || reviewType === 'maintenance_bid_comparison') {
     return `
 You are producing an ElevatorIQ Structured Bid Comparison Report. Follow this exact section structure. Be specific, detailed, and use actual numbers from the documents. Do not generalize.
 
@@ -159,7 +159,7 @@ Total billed | Amount recommend disputing | Amount recommend paying | Amount fla
 `;
   }
 
-  if (reviewType === 'single_modernization') {
+  if (reviewType === 'modernization_bid' || reviewType === 'single_modernization') {
     return `
 You are producing an ElevatorIQ Single Bid Review Report. Follow this exact structure:
 
@@ -197,6 +197,190 @@ What to push back on before signing. Specific asks, not general advice.
 SECTION 7 — RECOMMENDED QUESTIONS
 ═══════════════════════════════════════════════
 3–5 pointed questions to ask the vendor before award.
+`;
+  }
+
+  if (reviewType === 'new_construction_bid') {
+    return `
+You are producing an ElevatorIQ New Construction Bid Review Report. Follow this exact structure:
+
+═══════════════════════════════════════════════
+SECTION 1 — EXECUTIVE SUMMARY
+═══════════════════════════════════════════════
+Summarize the proposal: vendor, building type, number and type of elevators, price, and your overall read on competitiveness and completeness.
+
+═══════════════════════════════════════════════
+SECTION 2 — PRICE ASSESSMENT
+═══════════════════════════════════════════════
+Evaluate the price for the project scope:
+- Total bid price and price per unit
+- Is this competitive for new construction in this market?
+- Escalation clauses, tariff exposure, or price adjustment provisions
+- Allowance vs. fixed-price items — what could change before final invoice
+
+═══════════════════════════════════════════════
+SECTION 3 — PRODUCT & EQUIPMENT ASSESSMENT
+═══════════════════════════════════════════════
+Assess the proposed equipment:
+- Manufacturer and product line (traction, MRL, hydraulic, LU/LA)
+- Drive system and controller technology
+- Capacity, speed, and travel as proposed vs. code minimums
+- Cab finishes and interior quality
+- Proprietary vs. open architecture (long-term parts/service implications)
+
+═══════════════════════════════════════════════
+SECTION 4 — SCOPE REVIEW
+═══════════════════════════════════════════════
+Itemize what is included, excluded, and ambiguous. Flag any owner-responsibility items:
+- Hoistway rough-in and pit construction (by others or included)
+- Hoist beam and rated capacity
+- Electrical service to machine room (by others)
+- Fire alarm and smoke detector integration
+- Card reader / access control wiring
+- Pit ladder, lighting, GFCI, stop switch
+- Temporary construction use provisions
+- Grouting, firestopping, patching
+- Final inspection and reinspection fees
+- Permit and code compliance costs
+
+═══════════════════════════════════════════════
+SECTION 5 — RISK SIGNALS
+═══════════════════════════════════════════════
+List each risk as [SEVERITY] with finding and recommendation.
+
+═══════════════════════════════════════════════
+SECTION 6 — SCHEDULE & LEAD TIME
+═══════════════════════════════════════════════
+- Shop drawing submittal timeline
+- Manufacturing / fabrication lead time
+- Installation duration
+- Substantial completion and punch-list estimates
+- Dependencies on GC or base building milestones
+
+═══════════════════════════════════════════════
+SECTION 7 — NEGOTIATION POINTS
+═══════════════════════════════════════════════
+What to push back on before signing. Specific, actionable asks.
+
+═══════════════════════════════════════════════
+SECTION 8 — RECOMMENDED QUESTIONS
+═══════════════════════════════════════════════
+3–5 pointed questions for the vendor before award.
+`;
+  }
+
+  if (reviewType === 'maintenance_bid') {
+    return `
+You are producing an ElevatorIQ Maintenance Contract Review Report. Follow this exact structure:
+
+═══════════════════════════════════════════════
+SECTION 1 — EXECUTIVE SUMMARY
+═══════════════════════════════════════════════
+Summarize: vendor, number of units covered, contract type (full-service vs. oil & grease vs. parts & labor), annual price, term, and overall assessment.
+
+═══════════════════════════════════════════════
+SECTION 2 — PRICE ASSESSMENT
+═══════════════════════════════════════════════
+- Annual price per unit and total
+- Is this competitive for the contract type, equipment type, and market?
+- Escalation clause: how much, tied to what index, caps?
+- Auto-renewal / evergreen clause risk
+
+═══════════════════════════════════════════════
+SECTION 3 — CONTRACT COVERAGE ANALYSIS
+═══════════════════════════════════════════════
+Break down what is and is not covered under the proposed contract type:
+
+Full-Service: parts, labor, oil & grease, adjustments, callbacks, 24/7 emergency
+Oil & Grease: only lubrication and minor adjustments — what's excluded
+Parts & Labor: labor covered, parts billed separately — hidden cost risk
+
+Flag each of the following as INCLUDED / EXCLUDED / AMBIGUOUS:
+- All parts (including major components: motor, controller, valve)
+- Entrapment/emergency callback response — hours and response time SLA
+- After-hours callback fees
+- Hydraulic fluid (oil) and disposal
+- Annual Category 1 inspection
+- 5-year Category 5 test (hydraulic)
+- Pit cleaning and maintenance
+- Door equipment and operators
+- Proprietary diagnostic equipment requirements
+
+═══════════════════════════════════════════════
+SECTION 4 — CLAUSE RED FLAGS
+═══════════════════════════════════════════════
+Review contract language for:
+- Evergreen / automatic renewal clauses (notice window, penalty to exit)
+- Parts markup provisions (any language allowing extra charges for parts)
+- Callback limitations (how many included, cost of extras)
+- Liquidated damages exposure (what happens if elevator is down)
+- Proprietary lock-in (must use same company for repairs; proprietary parts)
+- Insurance and indemnification terms
+
+═══════════════════════════════════════════════
+SECTION 5 — RISK SIGNALS
+═══════════════════════════════════════════════
+[SEVERITY] format — finding and recommendation for each.
+
+═══════════════════════════════════════════════
+SECTION 6 — NEGOTIATION POINTS
+═══════════════════════════════════════════════
+What to negotiate before signing. Be specific — term length, renewal notice, price cap, coverage additions, etc.
+
+═══════════════════════════════════════════════
+SECTION 7 — RECOMMENDED QUESTIONS
+═══════════════════════════════════════════════
+3–5 pointed questions for the vendor.
+`;
+  }
+
+  if (reviewType === 'repair_bid') {
+    return `
+You are producing an ElevatorIQ Repair Bid Review Report. Follow this exact structure:
+
+═══════════════════════════════════════════════
+SECTION 1 — EXECUTIVE SUMMARY
+═══════════════════════════════════════════════
+Summarize: vendor, equipment being repaired, stated problem, proposed fix, price, and your overall read.
+
+═══════════════════════════════════════════════
+SECTION 2 — PRICE ASSESSMENT
+═══════════════════════════════════════════════
+- Total repair price
+- Is this fair for the scope of work described?
+- Labor hours and rate — is the rate in line with market?
+- Parts cost and markup — are parts prices reasonable?
+- Is this a permanent fix or a band-aid? Long-term cost implications.
+
+═══════════════════════════════════════════════
+SECTION 3 — SCOPE & NECESSITY REVIEW
+═══════════════════════════════════════════════
+- Is the proposed repair actually necessary for the described problem?
+- Are there alternative fixes that would be less expensive?
+- Is the root cause being addressed or just the symptom?
+- Are there any items in scope that appear to be upsells or unnecessary?
+
+═══════════════════════════════════════════════
+SECTION 4 — CONTRACT COVERAGE CHECK
+═══════════════════════════════════════════════
+- Does the owner have a maintenance contract? If so, should this repair be covered?
+- Flag any items that typically fall within full-service maintenance coverage.
+- Note any items that are legitimately outside typical contract scope.
+
+═══════════════════════════════════════════════
+SECTION 5 — RISK SIGNALS
+═══════════════════════════════════════════════
+[SEVERITY] format — finding and recommendation.
+
+═══════════════════════════════════════════════
+SECTION 6 — NEGOTIATION POINTS
+═══════════════════════════════════════════════
+What to challenge or negotiate. Specific asks — not generic.
+
+═══════════════════════════════════════════════
+SECTION 7 — RECOMMENDED QUESTIONS
+═══════════════════════════════════════════════
+3–5 targeted questions before authorizing the work.
 `;
   }
 
@@ -349,8 +533,14 @@ Replace the JSON placeholder with actual extracted data from the documents. Vali
 
 function getModule(reviewType) {
   if (reviewType === 'invoice_review' || reviewType === 'contract_coverage') return 'A';
-  if (reviewType === 'maintenance_bid_comparison') return 'C';
-  return 'B';
+  if (
+    reviewType === 'bid_comparison' ||
+    reviewType === 'modernization_comparison' ||
+    reviewType === 'maintenance_bid_comparison'
+  ) return 'B';
+  if (reviewType === 'maintenance_bid') return 'C';
+  if (reviewType === 'repair_bid') return 'D';
+  return 'B'; // new_construction_bid, modernization_bid, single_modernization, auto, default
 }
 
 module.exports = { analyze, __testables: { chunkText, parseAnalysisResponse, buildAnalysisInput } };
