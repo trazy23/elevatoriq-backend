@@ -35,6 +35,7 @@ router.post('/', async (req, res) => {
       requester_email,
       from_email,
       email,
+      company,
     } = req.body;
     const resolvedRecipientEmail =
       normalizeEmail(customer_email)
@@ -44,12 +45,34 @@ router.post('/', async (req, res) => {
       || normalizeEmail(from_email)
       || normalizeEmail(email);
     const normalizedReviewType = review_type || 'auto';
+    const normalizedCompany = (company && typeof company === 'string' && company.trim() !== '(not provided)')
+      ? company.trim() : null;
+
+    // Upsert customer record so we have a full CRM row for every submitter
+    let resolvedCustomerId = customer_id || null;
+    if (resolvedRecipientEmail) {
+      try {
+        const upsertResult = await db.query(
+          `INSERT INTO customers (email, company)
+           VALUES ($1, $2)
+           ON CONFLICT (email) DO UPDATE
+             SET company = COALESCE(EXCLUDED.company, customers.company),
+                 updated_at = NOW()
+           RETURNING id`,
+          [resolvedRecipientEmail, normalizedCompany]
+        );
+        resolvedCustomerId = upsertResult.rows[0]?.id || resolvedCustomerId;
+      } catch (upsertErr) {
+        // Non-fatal — log but don't block case creation
+        console.warn('[Cases] Customer upsert failed:', upsertErr.message);
+      }
+    }
 
     const module = getModule(normalizedReviewType === 'auto' ? 'contract_coverage' : normalizedReviewType);
     const result = await db.query(
       `INSERT INTO cases (customer_id, review_type, module, state, market, equipment_type, customer_email)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [customer_id || null, normalizedReviewType, module, state, market, equipment_type, resolvedRecipientEmail]
+      [resolvedCustomerId, normalizedReviewType, module, state, market, equipment_type, resolvedRecipientEmail]
     );
     res.json({ case_id: result.rows[0].id, status: 'pending' });
   } catch (err) {

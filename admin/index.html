@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ElevatorIQ Admin</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0B0E13; color: #E8EAF0; font-family: 'DM Sans', -apple-system, sans-serif; font-size: 14px; }
+  a { color: #00B876; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* Layout */
+  .header { background: #12161E; border-bottom: 1px solid #1A1F2A; padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .logo { font-size: 17px; font-weight: 700; letter-spacing: -0.03em; }
+  .logo span { color: #00B876; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .badge { background: rgba(0,184,118,0.1); border: 1px solid rgba(0,184,118,0.2); color: #00B876; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 4px; letter-spacing: 0.04em; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 28px 24px; }
+
+  /* Login */
+  .login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .login-box { background: #12161E; border: 1px solid #1A1F2A; border-radius: 14px; padding: 40px 36px; width: 360px; }
+  .login-title { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 6px; }
+  .login-sub { font-size: 12.5px; color: #7C8290; margin-bottom: 28px; }
+  input[type=password], input[type=text] {
+    width: 100%; background: #1A1F2A; border: 1px solid #222836; border-radius: 8px;
+    padding: 11px 14px; color: #E8EAF0; font-size: 14px; outline: none; margin-bottom: 12px;
+  }
+  input:focus { border-color: #00B876; }
+  .btn { width: 100%; background: #00B876; color: #0B0E13; border: none; border-radius: 8px; padding: 12px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+  .btn:hover { background: #00CC84; }
+  .btn:disabled { background: #1A1F2A; color: #5E6470; cursor: not-allowed; }
+  .err { font-size: 12px; color: #E85D5D; margin-top: 8px; text-align: center; }
+
+  /* Stats */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 28px; }
+  .stat-card { background: #12161E; border: 1px solid #1A1F2A; border-radius: 10px; padding: 18px 20px; }
+  .stat-num { font-size: 26px; font-weight: 700; letter-spacing: -0.03em; color: #00B876; line-height: 1.1; }
+  .stat-label { font-size: 11.5px; color: #7C8290; margin-top: 4px; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; background: #12161E; border: 1px solid #1A1F2A; border-radius: 9px; padding: 4px; margin-bottom: 20px; width: fit-content; }
+  .tab { background: none; border: none; color: #7C8290; font-size: 13px; font-weight: 500; padding: 8px 18px; border-radius: 7px; cursor: pointer; transition: all 0.15s; }
+  .tab.active { background: #1A1F2A; color: #E8EAF0; }
+  .tab:hover:not(.active) { color: #9AA0AE; }
+
+  /* Table */
+  .table-wrap { background: #12161E; border: 1px solid #1A1F2A; border-radius: 12px; overflow: hidden; }
+  .table-header { padding: 14px 20px; border-bottom: 1px solid #1A1F2A; display: flex; align-items: center; justify-content: space-between; }
+  .table-title { font-size: 13px; font-weight: 600; color: #9AA0AE; text-transform: uppercase; letter-spacing: 0.06em; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { background: #0F1318; padding: 11px 16px; text-align: left; font-size: 11px; font-weight: 600; color: #5E6470; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid #1A1F2A; white-space: nowrap; }
+  tbody tr { border-bottom: 1px solid #1A1F2A; transition: background 0.1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+  td { padding: 12px 16px; font-size: 12.5px; color: #D0D4DC; vertical-align: middle; }
+  .email { color: #E8EAF0; font-weight: 500; }
+  .company { color: #9AA0AE; font-size: 12px; }
+  .pill { display: inline-block; font-size: 10.5px; font-weight: 500; padding: 2px 9px; border-radius: 4px; white-space: nowrap; }
+  .pill-green { background: rgba(0,184,118,0.12); color: #00B876; }
+  .pill-red { background: rgba(232,93,93,0.12); color: #E85D5D; }
+  .pill-yellow { background: rgba(232,168,64,0.12); color: #E8A840; }
+  .pill-gray { background: rgba(94,100,112,0.15); color: #9AA0AE; }
+  .pill-blue { background: rgba(80,140,255,0.12); color: #80AAFF; }
+  .mono { font-family: 'DM Mono', monospace; font-size: 11px; color: #5E6470; }
+  .loading { padding: 40px; text-align: center; color: #5E6470; font-size: 13px; }
+  .refresh-btn { background: none; border: 1px solid #1A1F2A; color: #9AA0AE; border-radius: 7px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+  .refresh-btn:hover { border-color: #00B876; color: #00B876; }
+  .empty { padding: 40px; text-align: center; color: #5E6470; }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div id="app">
+  <!-- Rendered by JS -->
+</div>
+
+<script>
+const API = 'https://elevatoriq-backend-prod.onrender.com';
+let adminKey = sessionStorage.getItem('eiq_admin_key') || '';
+let currentTab = 'submissions';
+let data = { stats: null, submissions: [], customers: [] };
+let loading = false;
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function fmt(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+    ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+function fmtDate(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function reviewTypeLabel(rt) {
+  const map = {
+    new_construction_bid: 'New Construction',
+    modernization_bid: 'Modernization',
+    maintenance_bid: 'Maintenance',
+    repair_bid: 'Repair',
+    bid_comparison: 'Bid Comparison',
+    modernization_comparison: 'Mod. Comparison',
+    maintenance_bid_comparison: 'Maint. Comparison',
+    invoice_review: 'Invoice Audit',
+    contract_coverage: 'Contract vs Invoice',
+    auto: 'Auto-detected',
+  };
+  return map[rt] || rt || '—';
+}
+
+function statusPill(status) {
+  if (status === 'complete') return `<span class="pill pill-green">Complete</span>`;
+  if (status === 'failed') return `<span class="pill pill-red">Failed</span>`;
+  if (status === 'processing') return `<span class="pill pill-yellow">Processing</span>`;
+  return `<span class="pill pill-gray">${status || 'Pending'}</span>`;
+}
+
+// ── API calls ────────────────────────────────────────────────────────────
+
+async function fetchAPI(path) {
+  const res = await fetch(`${API}${path}`, {
+    headers: { 'x-admin-key': adminKey }
+  });
+  if (res.status === 401) throw new Error('Invalid admin key');
+  if (!res.ok) throw new Error(`Error ${res.status}`);
+  return res.json();
+}
+
+async function loadAll() {
+  loading = true;
+  render();
+  try {
+    const [stats, subs, custs] = await Promise.all([
+      fetchAPI('/api/admin/stats'),
+      fetchAPI('/api/admin/submissions?limit=200'),
+      fetchAPI('/api/admin/customers'),
+    ]);
+    data.stats = stats;
+    data.submissions = subs.submissions || [];
+    data.customers = custs.customers || [];
+    loading = false;
+    render();
+  } catch (e) {
+    loading = false;
+    if (e.message === 'Invalid admin key') {
+      adminKey = '';
+      sessionStorage.removeItem('eiq_admin_key');
+    }
+    render(e.message);
+  }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────
+
+function render(errMsg) {
+  const app = document.getElementById('app');
+
+  if (!adminKey) {
+    app.innerHTML = `
+      <div class="login-wrap">
+        <div class="login-box">
+          <div class="login-title">Elevator<span style="color:#00B876">IQ</span> Admin</div>
+          <div class="login-sub">Enter your admin API key to continue.</div>
+          <input type="password" id="keyInput" placeholder="Admin API key" autocomplete="off" />
+          <button class="btn" id="loginBtn">Sign In</button>
+          ${errMsg ? `<div class="err">${errMsg}</div>` : ''}
+        </div>
+      </div>`;
+    document.getElementById('loginBtn').onclick = doLogin;
+    document.getElementById('keyInput').onkeydown = (e) => { if (e.key === 'Enter') doLogin(); };
+    setTimeout(() => document.getElementById('keyInput')?.focus(), 50);
+    return;
+  }
+
+  const stats = data.stats?.totals || {};
+
+  app.innerHTML = `
+    <div class="header">
+      <div class="logo">Elevator<span>IQ</span> <span style="color:#5E6470;font-weight:400;font-size:13px">/ Admin</span></div>
+      <div class="header-right">
+        <span class="badge">INTERNAL</span>
+        <button class="refresh-btn" id="refreshBtn">↻ Refresh</button>
+        <button class="refresh-btn" id="logoutBtn">Sign Out</button>
+      </div>
+    </div>
+    <div class="container">
+      ${loading ? '<div class="loading">Loading...</div>' : renderDashboard(stats)}
+    </div>`;
+
+  document.getElementById('refreshBtn')?.addEventListener('click', loadAll);
+  document.getElementById('logoutBtn')?.addEventListener('click', () => {
+    adminKey = '';
+    sessionStorage.removeItem('eiq_admin_key');
+    render();
+  });
+  document.querySelectorAll('.tab').forEach(btn => {
+    btn.addEventListener('click', () => { currentTab = btn.dataset.tab; render(); });
+  });
+}
+
+function renderDashboard(stats) {
+  return `
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-num">${stats.total_submissions || 0}</div><div class="stat-label">Total Submissions</div></div>
+      <div class="stat-card"><div class="stat-num">${stats.unique_emails || 0}</div><div class="stat-label">Unique Customers</div></div>
+      <div class="stat-card"><div class="stat-num">${stats.last_7_days || 0}</div><div class="stat-label">Last 7 Days</div></div>
+      <div class="stat-card"><div class="stat-num">${stats.last_30_days || 0}</div><div class="stat-label">Last 30 Days</div></div>
+      <div class="stat-card"><div class="stat-num">${stats.completed || 0}</div><div class="stat-label">Completed</div></div>
+      <div class="stat-card"><div class="stat-num">${stats.failed || 0}</div><div class="stat-label">Failed</div></div>
+    </div>
+    <div class="tabs">
+      <button class="tab ${currentTab === 'submissions' ? 'active' : ''}" data-tab="submissions">Submissions (${data.submissions.length})</button>
+      <button class="tab ${currentTab === 'customers' ? 'active' : ''}" data-tab="customers">Customers (${data.customers.length})</button>
+      <button class="tab ${currentTab === 'review_types' ? 'active' : ''}" data-tab="review_types">Review Types</button>
+    </div>
+    ${currentTab === 'submissions' ? renderSubmissions() : ''}
+    ${currentTab === 'customers' ? renderCustomers() : ''}
+    ${currentTab === 'review_types' ? renderReviewTypes() : ''}
+  `;
+}
+
+function renderSubmissions() {
+  if (!data.submissions.length) return '<div class="empty">No submissions yet.</div>';
+  const rows = data.submissions.map(s => `
+    <tr>
+      <td>${fmt(s.created_at)}</td>
+      <td><div class="email">${s.customer_email || '—'}</div>${s.company ? `<div class="company">${s.company}</div>` : ''}</td>
+      <td><span class="pill pill-blue">${reviewTypeLabel(s.review_type)}</span></td>
+      <td>${statusPill(s.status)}</td>
+      <td class="mono">${s.total_reviews || 1}</td>
+      <td>${s.download_token ? `<a href="https://elevatoriq-backend-prod.onrender.com/api/reports/download/${s.download_token}" target="_blank">Download</a>` : '—'}</td>
+    </tr>`).join('');
+  return `
+    <div class="table-wrap">
+      <div class="table-header">
+        <span class="table-title">All Submissions</span>
+        <span class="mono">${data.submissions.length} total</span>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Date</th><th>Email / Company</th><th>Review Type</th><th>Status</th><th>Reviews</th><th>Report</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderCustomers() {
+  if (!data.customers.length) return '<div class="empty">No customers yet.</div>';
+  const rows = data.customers.map(c => `
+    <tr>
+      <td>${fmtDate(c.created_at)}</td>
+      <td><div class="email">${c.email}</div>${c.company ? `<div class="company">${c.company}</div>` : ''}</td>
+      <td class="mono">${c.total_reviews || 0}</td>
+      <td class="mono">${c.completed_reviews || 0}</td>
+      <td>${fmtDate(c.last_review_at)}</td>
+      <td>${(c.review_types_used || []).filter(Boolean).map(rt => `<span class="pill pill-gray" style="margin-right:3px">${reviewTypeLabel(rt)}</span>`).join('')}</td>
+    </tr>`).join('');
+  return `
+    <div class="table-wrap">
+      <div class="table-header">
+        <span class="table-title">All Customers</span>
+        <span class="mono">${data.customers.length} unique</span>
+      </div>
+      <table>
+        <thead><tr>
+          <th>First Seen</th><th>Email / Company</th><th>Total Reviews</th><th>Completed</th><th>Last Review</th><th>Types Used</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderReviewTypes() {
+  const types = data.stats?.review_types || [];
+  if (!types.length) return '<div class="empty">No data yet.</div>';
+  const total = types.reduce((sum, t) => sum + parseInt(t.count), 0);
+  const rows = types.map(t => {
+    const pct = total > 0 ? Math.round((t.count / total) * 100) : 0;
+    return `
+      <tr>
+        <td><span class="pill pill-blue">${reviewTypeLabel(t.review_type)}</span></td>
+        <td class="mono">${t.count}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="height:6px;border-radius:3px;background:#1A1F2A;width:200px;overflow:hidden">
+              <div style="height:100%;border-radius:3px;background:#00B876;width:${pct}%"></div>
+            </div>
+            <span class="mono">${pct}%</span>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+  return `
+    <div class="table-wrap">
+      <div class="table-header"><span class="table-title">Review Type Breakdown</span></div>
+      <table>
+        <thead><tr><th>Type</th><th>Count</th><th>Share</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function doLogin() {
+  const val = document.getElementById('keyInput')?.value?.trim();
+  if (!val) return;
+  adminKey = val;
+  sessionStorage.setItem('eiq_admin_key', val);
+  loadAll();
+}
+
+// ── Boot ─────────────────────────────────────────────────────────────────
+
+render();
+if (adminKey) loadAll();
+</script>
+</body>
+</html>

@@ -29,11 +29,14 @@ const allowedOrigins = Array.from(new Set([
 app.use(cors({
   origin: allowedOrigins,
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key'],
 }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve admin dashboard at /admin
+app.use('/admin', express.static(path.join(__dirname, 'admin')));
 
 const distPath = process.env.FRONTEND_DIST_PATH || '/root/elevatoriq-dist';
 const hasDist = fs.existsSync(distPath);
@@ -50,12 +53,14 @@ const documentsRouter = require('./src/routes/documents');
 const reportsRouter = require('./src/routes/reports');
 const promptRouter = require('./src/routes/prompt');
 const invoiceRouter = require('./src/routes/invoice');
+const adminRouter = require('./src/routes/admin');
 
 app.use('/api/cases', casesRouter);
 app.use('/api/cases/:id/documents', documentsRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/prompt', promptRouter);
 app.use('/api/invoice', invoiceRouter);
+app.use('/api/admin', adminRouter);
 
 // Health checks
 app.get('/health', (req, res) => {
