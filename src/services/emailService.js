@@ -7,11 +7,12 @@ const resend = new Resend(process.env.EMAIL_PROVIDER_API_KEY);
 /**
  * sendReport — Email PDF via Resend SDK
  */
-async function sendReport(toEmail, pdfBuffer, reviewType, downloadToken) {
+async function sendReport(toEmail, pdfBuffer, reviewType, downloadToken, recipientName = null) {
   const backendUrl = process.env.BACKEND_URL || `https://elevatoriq-backend-prod.onrender.com`;
   const downloadUrl = `${backendUrl}/api/reports/download/${downloadToken}`;
   const reviewLabel = reviewType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-  
+  const firstName = recipientName ? recipientName.trim().split(/\s+/)[0] : null;
+
   const fromEmail = process.env.FROM_EMAIL || BRAND.reportsFromEmail;
 
   if (!process.env.EMAIL_PROVIDER_API_KEY) {
@@ -30,6 +31,7 @@ async function sendReport(toEmail, pdfBuffer, reviewType, downloadToken) {
           <h2 style="color: white; margin: 0;">Elevator<span style="color: #00B876;">IQ</span></h2>
         </div>
         <div style="padding: 32px; background: #f8f9fa;">
+          ${firstName ? `<p style="font-size: 16px; color: #1a1a2e;">Hi ${firstName},</p>` : ''}
           <p style="font-size: 16px; color: #1a1a2e;"><strong>Your ${reviewLabel} is ready.</strong></p>
           <p style="color: #555; line-height: 1.6;">
             Your structured elevator analysis has been completed and is attached as a PDF.
@@ -66,12 +68,20 @@ async function sendReport(toEmail, pdfBuffer, reviewType, downloadToken) {
 /**
  * sendSubmissionAlert — Notify the owner when a new submission comes in
  */
-async function sendSubmissionAlert({ customerEmail, company, reviewType, caseId }) {
+async function sendSubmissionAlert({ customerEmail, company, name, role, reviewType, caseId }) {
   const notifyEmail = process.env.ADMIN_NOTIFY_EMAIL;
   if (!notifyEmail) return; // Not configured — skip silently
 
   const fromEmail = process.env.FROM_EMAIL || BRAND.reportsFromEmail;
   const reviewLabel = (reviewType || 'auto').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const roleLabels = {
+    property_manager: 'Property Manager',
+    facilities_director: 'Facilities Director',
+    building_owner: 'Building Owner',
+    consultant: 'Consultant',
+    other: 'Other',
+  };
+  const roleLabel = role ? (roleLabels[role] || role) : null;
   const adminUrl = process.env.BACKEND_URL
     ? `${process.env.BACKEND_URL}/admin`
     : 'https://elevatoriq-backend-prod.onrender.com/admin';
@@ -95,8 +105,16 @@ async function sendSubmissionAlert({ customerEmail, company, reviewType, caseId 
           <div style="padding: 28px; background: #f8f9fa; border: 1px solid #e0e0e0;">
             <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
               <tr>
-                <td style="padding: 8px 0; color: #888; width: 120px;">Email</td>
-                <td style="padding: 8px 0; color: #111; font-weight: 600;">${customerEmail || '(not provided)'}</td>
+                <td style="padding: 8px 0; color: #888; width: 120px;">Name</td>
+                <td style="padding: 8px 0; color: #111; font-weight: 600;">${name || '(not provided)'}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #888;">Email</td>
+                <td style="padding: 8px 0; color: #111;">${customerEmail || '(not provided)'}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #888;">Role</td>
+                <td style="padding: 8px 0; color: #111;">${roleLabel || '(not provided)'}</td>
               </tr>
               <tr>
                 <td style="padding: 8px 0; color: #888;">Company</td>

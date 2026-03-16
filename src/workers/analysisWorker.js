@@ -24,6 +24,22 @@ async function getCustomerEmail(caseId) {
   return result.rows[0].customer_email || result.rows[0].cust_email || null;
 }
 
+async function getCustomerInfo(caseId) {
+  const result = await db.query(
+    `SELECT c.customer_email, cu.email as cust_email, cu.name
+     FROM cases c
+     LEFT JOIN customers cu ON c.customer_id = cu.id
+     WHERE c.id = $1`,
+    [caseId]
+  );
+  if (!result.rows.length) return { email: null, name: null };
+  const row = result.rows[0];
+  return {
+    email: row.customer_email || row.cust_email || null,
+    name: row.name || null,
+  };
+}
+
 // ■ CRITICAL: Strip vendor/building/owner names before insert
 // In production, this should use NER or pattern matching
 function anonymize(json) {
@@ -265,10 +281,10 @@ async function processCase(caseId) {
     );
 
     // 10. Send email (if we have an email address)
-    const customerEmail = await getCustomerEmail(caseId);
+    const { email: customerEmail, name: customerName } = await getCustomerInfo(caseId);
     if (customerEmail) {
       try {
-        await emailService.sendReport(customerEmail, pdfBuffer, caseRow.review_type, token);
+        await emailService.sendReport(customerEmail, pdfBuffer, caseRow.review_type, token, customerName);
         await db.query(`UPDATE reports SET emailed_at=NOW() WHERE download_token=$1`, [token]);
         console.log(`[Worker] Email sent to ${customerEmail} for case ${caseId}`);
       } catch (emailErr) {
