@@ -40,9 +40,28 @@ const PLANS = {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-async function getAccessLevel(email) {
+// Returns array of valid access codes from env var ACCESS_CODES (comma-separated)
+// e.g. ACCESS_CODES=PILOT2026,BETA123,TREYZTEST
+function getValidCodes() {
+  const raw = process.env.ACCESS_CODES || '';
+  return raw.split(',').map(c => c.trim().toUpperCase()).filter(Boolean);
+}
+
+function isValidAccessCode(code) {
+  if (!code) return false;
+  const valid = getValidCodes();
+  if (!valid.length) return false;
+  return valid.includes(code.trim().toUpperCase());
+}
+
+async function getAccessLevel(email, code) {
   const normalizedEmail = (email || '').toLowerCase().trim();
   if (!normalizedEmail) return { access: 'none', tier: null };
+
+  // Access code bypass — grants unlimited free access (for pilots, testing, gifted access)
+  if (isValidAccessCode(code)) {
+    return { access: 'free', tier: 'access_code', unlimited: true };
+  }
 
   // Check active subscription
   const sub = await db.query(
@@ -74,9 +93,9 @@ async function getAccessLevel(email) {
 // ─── GET /api/payments/status ───────────────────────────────────────────────
 router.get('/status', async (req, res) => {
   try {
-    const { email } = req.query;
+    const { email, code } = req.query;
     if (!email) return res.status(400).json({ error: 'email query param required' });
-    const result = await getAccessLevel(email);
+    const result = await getAccessLevel(email, code);
     res.json(result);
   } catch (err) {
     console.error('[Payments] Status check error:', err.message);
