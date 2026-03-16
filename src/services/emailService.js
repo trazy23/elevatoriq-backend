@@ -131,4 +131,50 @@ async function sendSubmissionAlert({ customerEmail, company, reviewType, caseId 
   }
 }
 
-module.exports = { sendReport, sendSubmissionAlert };
+/**
+ * sendQualityFailure — Notify customer when analysis couldn't generate a deliverable report
+ */
+async function sendQualityFailure(toEmail, reviewType, caseId) {
+  const fromEmail = process.env.FROM_EMAIL || BRAND.reportsFromEmail;
+  const reviewLabel = (reviewType || 'review').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+  if (!process.env.EMAIL_PROVIDER_API_KEY) {
+    console.log(`[Email-Mock] Quality failure notice would be sent to ${toEmail} for case ${caseId}`);
+    return;
+  }
+
+  const result = await resend.emails.send({
+    from: fromEmail,
+    to: toEmail,
+    subject: `ElevatorIQ: We couldn't generate your ${reviewLabel}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto;">
+        <div style="background: #0B0E13; padding: 24px; text-align: center;">
+          <h2 style="color: white; margin: 0;">Elevator<span style="color: #00B876;">IQ</span></h2>
+        </div>
+        <div style="padding: 32px; background: #f8f9fa;">
+          <p style="font-size: 16px; color: #1a1a2e;"><strong>We weren't able to generate a quality report for your submission.</strong></p>
+          <p style="color: #555; line-height: 1.6;">
+            Our analysis engine couldn't extract enough structured information from the uploaded document to produce
+            a complete report. This can happen when documents are scanned images, heavily redacted, or not
+            elevator-related contracts or bids.
+          </p>
+          <p style="color: #555; line-height: 1.6;">
+            <strong>To retry:</strong> Return to <a href="https://elevatoriq.ai" style="color: #00B876;">elevatoriq.ai</a>
+            and re-submit with a cleaner or different version of the document.
+            If you believe this was an error, reply to this email and we'll review it manually.
+          </p>
+          <p style="font-size: 11px; color: #aaa; margin-top: 24px;">Case ID: ${caseId}</p>
+        </div>
+      </div>
+    `,
+  });
+
+  if (result.error) {
+    throw new Error(`Resend error: ${result.error.message}`);
+  }
+
+  return result;
+}
+
+module.exports = { sendReport, sendSubmissionAlert, sendQualityFailure };

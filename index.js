@@ -3,6 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const cron = require('node-cron');
+const { runAggregation } = require('./src/workers/aggregationJob');
 
 const app = express();
 
@@ -139,6 +141,18 @@ app.use((err, req, res, next) => {
 
 // Export app for Vercel serverless
 module.exports = app;
+
+// Schedule daily aggregation job — runs at 3:00 AM every day
+// Only runs if DATABASE_URL is present (i.e., production or staging)
+if (process.env.DATABASE_URL) {
+  cron.schedule('0 3 * * *', () => {
+    console.log('[Cron] Running daily aggregation job...');
+    runAggregation()
+      .then((version) => console.log(`[Cron] Aggregation complete. New version: ${version}`))
+      .catch((err) => console.error('[Cron] Aggregation failed:', err.message));
+  }, { timezone: 'America/Chicago' });
+  console.log('[Cron] Aggregation job scheduled for 3:00 AM CT daily');
+}
 
 // Listen locally for development
 if (require.main === module) {

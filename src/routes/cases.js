@@ -1,10 +1,23 @@
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
 const db = require('../db');
 const { addJob } = require('../workers/analysisWorker');
 const { getStructuredReportKey } = require('../utils/reportArtifacts');
 const { inferReviewTypeFromDocuments } = require('../services/documentTypeService');
 const { sendSubmissionAlert } = require('../services/emailService');
+
+// Rate limiter: 5 requests per IP per hour on submission endpoints
+const submissionLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Too many submissions from this IP. Please wait before submitting again.',
+    retryAfter: 'Try again in 1 hour.',
+  },
+});
 
 function normalizeEmail(value) {
   if (typeof value !== 'string') return null;
@@ -22,7 +35,7 @@ function getModule(review_type) {
 }
 
 // POST /api/cases — Create a case
-router.post('/', async (req, res) => {
+router.post('/', submissionLimiter, async (req, res) => {
   try {
     const {
       customer_id,
@@ -93,7 +106,7 @@ router.post('/', async (req, res) => {
 });
 
 // POST /api/cases/:id/run — Trigger analysis
-router.post('/:id/run', async (req, res) => {
+router.post('/:id/run', submissionLimiter, async (req, res) => {
   try {
     const { id } = req.params;
     const caseRow = await db.query('SELECT * FROM cases WHERE id=$1', [id]);

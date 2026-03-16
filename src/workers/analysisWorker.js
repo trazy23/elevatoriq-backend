@@ -225,10 +225,18 @@ async function processCase(caseId) {
       combinedText, caseRow.review_type, contextBlock
     );
 
-    // MVP: Skip quality gate - generate report regardless
-    // if (!isReportDeliverable(analysisResult.reportBody, combinedText)) {
-    //   throw new Error('Analysis output failed deliverable quality gate');
-    // }
+    // Quality gate: verify analysis output meets minimum standards
+    if (!isReportDeliverable(analysisResult.reportBody, combinedText)) {
+      const customerEmail = await getCustomerEmail(caseId);
+      if (customerEmail) {
+        try {
+          await emailService.sendQualityFailure(customerEmail, caseRow.review_type, caseId);
+        } catch (emailErr) {
+          console.warn(`[Worker] Quality failure email failed for ${caseId}: ${emailErr.message}`);
+        }
+      }
+      throw new Error('Analysis output failed deliverable quality gate');
+    }
 
     // 6. Validate + save extraction (non-blocking on failure)
     let extractionId = null;
