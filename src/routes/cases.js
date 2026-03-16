@@ -6,6 +6,14 @@ const { addJob } = require('../workers/analysisWorker');
 const { getStructuredReportKey } = require('../utils/reportArtifacts');
 const { inferReviewTypeFromDocuments } = require('../services/documentTypeService');
 const { sendSubmissionAlert } = require('../services/emailService');
+const { checkFreeEligibility } = require('../services/freeEligibilityService');
+
+// Extract real client IP — respects X-Forwarded-For from Render/proxies
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return req.socket?.remoteAddress || req.ip || null;
+}
 
 // Rate limiter: 5 requests per IP per hour on submission endpoints
 const submissionLimiter = rateLimit({
@@ -93,10 +101,24 @@ router.post('/', submissionLimiter, async (req, res) => {
     // payment_status: 'pending_payment' for pay-per Stripe flow (webhook triggers run)
     // 'free' for first-review-free and subscription flows (run triggered directly)
     const paymentStatus = req.body.payment_status === 'pending_payment' ? 'pending_payment' : 'free';
+    const clientIp = getClientIp(req);
+
+    // Free tier abuse check — email normalization + IP + disposable domain
+    if (paymentStatus === 'free') {
+      const eligibility = await checkFreeEligibility(resolvedRecipientEmail, clientIp);
+      if (!eligibility.eligible) {
+        return res.status(403).json({
+          error: 'Free review not available',
+          code: eligibility.reason,
+          message: eligibility.message,
+        });
+      }
+    }
+
     const result = await db.query(
-      `INSERT INTO cases (customer_id, review_type, module, state, market, equipment_type, customer_email, payment_status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-      [resolvedCustomerId, normalizedReviewType, module, state, market, equipment_type, resolvedRecipientEmail, paymentStatus]
+      `INSERT INTO cases (customer_id, review_type, module, state, market, equipment_type, customer_email, payment_status, client_ip)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [resolvedCustomerId, normalizedReviewType, module, state, market, equipment_type, resolvedRecipientEmail, paymentStatus, clientIp]
     );
     const caseId = result.rows[0].id;
 
