@@ -50,6 +50,8 @@ router.post('/', submissionLimiter, async (req, res) => {
       from_email,
       email,
       company,
+      name,
+      role,
     } = req.body;
     const resolvedRecipientEmail =
       normalizeEmail(customer_email)
@@ -61,19 +63,24 @@ router.post('/', submissionLimiter, async (req, res) => {
     const normalizedReviewType = review_type || 'auto';
     const normalizedCompany = (company && typeof company === 'string' && company.trim() !== '(not provided)')
       ? company.trim() : null;
+    const normalizedName = (name && typeof name === 'string') ? name.trim() || null : null;
+    const validRoles = ['property_manager', 'facilities_director', 'building_owner', 'consultant', 'other'];
+    const normalizedRole = validRoles.includes(role) ? role : null;
 
-    // Upsert customer record so we have a full CRM row for every submitter
+    // Upsert customer record — update name/role only if newly provided (don't overwrite with null)
     let resolvedCustomerId = customer_id || null;
     if (resolvedRecipientEmail) {
       try {
         const upsertResult = await db.query(
-          `INSERT INTO customers (email, company)
-           VALUES ($1, $2)
+          `INSERT INTO customers (email, company, name, role)
+           VALUES ($1, $2, $3, $4)
            ON CONFLICT (email) DO UPDATE
              SET company = COALESCE(EXCLUDED.company, customers.company),
+                 name    = COALESCE(EXCLUDED.name, customers.name),
+                 role    = COALESCE(EXCLUDED.role, customers.role),
                  updated_at = NOW()
            RETURNING id`,
-          [resolvedRecipientEmail, normalizedCompany]
+          [resolvedRecipientEmail, normalizedCompany, normalizedName, normalizedRole]
         );
         resolvedCustomerId = upsertResult.rows[0]?.id || resolvedCustomerId;
       } catch (upsertErr) {
@@ -97,6 +104,8 @@ router.post('/', submissionLimiter, async (req, res) => {
     sendSubmissionAlert({
       customerEmail: resolvedRecipientEmail,
       company: normalizedCompany,
+      name: normalizedName,
+      role: normalizedRole,
       reviewType: normalizedReviewType,
       caseId,
     });
