@@ -15,6 +15,7 @@
   "dependencies": {
     "express-rate-limit": "^7.5.0",
     "node-cron": "^3.0.3",
+    "stripe": "^17.7.0",
     "@anthropic-ai/sdk": "^0.78.0",
     "@aws-sdk/client-s3": "^3.995.0",
     "@aws-sdk/s3-request-presigner": "^3.995.0",

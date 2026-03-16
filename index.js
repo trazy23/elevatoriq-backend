@@ -56,6 +56,10 @@ const reportsRouter = require('./src/routes/reports');
 const promptRouter = require('./src/routes/prompt');
 const invoiceRouter = require('./src/routes/invoice');
 const adminRouter = require('./src/routes/admin');
+const { router: paymentsRouter, handleStripeWebhook } = require('./src/routes/payments');
+
+// Stripe webhook — MUST use raw body, registered before express.json()
+app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
 
 app.use('/api/cases', casesRouter);
 app.use('/api/cases/:id/documents', documentsRouter);
@@ -63,6 +67,7 @@ app.use('/api/reports', reportsRouter);
 app.use('/api/prompt', promptRouter);
 app.use('/api/invoice', invoiceRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/payments', paymentsRouter);
 
 // Health checks
 app.get('/health', (req, res) => {

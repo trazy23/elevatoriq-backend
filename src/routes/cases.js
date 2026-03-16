@@ -83,10 +83,13 @@ router.post('/', submissionLimiter, async (req, res) => {
     }
 
     const module = getModule(normalizedReviewType === 'auto' ? 'contract_coverage' : normalizedReviewType);
+    // payment_status: 'pending_payment' for pay-per Stripe flow (webhook triggers run)
+    // 'free' for first-review-free and subscription flows (run triggered directly)
+    const paymentStatus = req.body.payment_status === 'pending_payment' ? 'pending_payment' : 'free';
     const result = await db.query(
-      `INSERT INTO cases (customer_id, review_type, module, state, market, equipment_type, customer_email)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [resolvedCustomerId, normalizedReviewType, module, state, market, equipment_type, resolvedRecipientEmail]
+      `INSERT INTO cases (customer_id, review_type, module, state, market, equipment_type, customer_email, payment_status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      [resolvedCustomerId, normalizedReviewType, module, state, market, equipment_type, resolvedRecipientEmail, paymentStatus]
     );
     const caseId = result.rows[0].id;
 
@@ -111,6 +114,15 @@ router.post('/:id/run', submissionLimiter, async (req, res) => {
     const { id } = req.params;
     const caseRow = await db.query('SELECT * FROM cases WHERE id=$1', [id]);
     if (!caseRow.rows.length) return res.status(404).json({ error: 'Case not found' });
+
+    // Block analysis if payment is pending (Stripe webhook will trigger run after payment)
+    if (caseRow.rows[0].payment_status === 'pending_payment') {
+      return res.status(402).json({
+        error: 'Payment required',
+        code: 'PAYMENT_REQUIRED',
+        message: 'Complete payment to run this analysis',
+      });
+    }
 
     const docs = await db.query('SELECT * FROM documents WHERE case_id=$1', [id]);
     if (!docs.rows.length) return res.status(400).json({ error: 'No documents uploaded for this case' });
