@@ -17,6 +17,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const Anthropic = require('@anthropic-ai/sdk');
+const { generateScopePDF } = require('../services/scopePdfService');
 require('dotenv').config();
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -838,16 +839,22 @@ router.post('/sessions/:id/outputs/:oid/acknowledge', async (req, res) => {
 
 /**
  * GET /api/v1/scope-generator/sessions/:id/outputs/:oid/download
- * Download document as plain text. Returns 403 if not acknowledged.
+ * Download branded PDF (default) or plain text. Returns 403 if not acknowledged.
  */
 router.get('/sessions/:id/outputs/:oid/download', async (req, res) => {
   const { id, oid } = req.params;
-  const format = req.query.format || 'txt';
+  const format = req.query.format || 'pdf';
 
   try {
+    // Fetch output + session + universal intake for property info
     const result = await db.query(
-      `SELECT document_text, framework_id, acknowledgment_confirmed, output_path
-       FROM scope_outputs WHERE id = $1 AND session_id = $2`,
+      `SELECT o.document_text, o.framework_id, o.acknowledgment_confirmed, o.output_path,
+              s.work_type,
+              u.building_name, u.building_address
+       FROM scope_outputs o
+       JOIN scope_sessions s ON s.id = o.session_id
+       LEFT JOIN scope_intake_universal u ON u.session_id = o.session_id
+       WHERE o.id = $1 AND o.session_id = $2`,
       [oid, id]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Output not found' });
@@ -857,13 +864,34 @@ router.get('/sessions/:id/outputs/:oid/download', async (req, res) => {
       return res.status(403).json({ error: 'Acknowledgment required before download' });
     }
 
-    const filename = `ElevatorIQ_${output.framework_id}_Bid_Framework.txt`;
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    const property = [output.building_name, output.building_address].filter(Boolean).join(' — ') || 'Property';
+
+    if (format === 'txt') {
+      const filename = `ElevatorIQ_${output.framework_id}_Bid_Framework.txt`;
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.send(output.document_text);
+    }
+
+    // Default: branded PDF
+    console.log(`[ScopeGenerator] Generating PDF for ${output.framework_id}...`);
+    const pdfBuffer = await generateScopePDF(
+      output.document_text,
+      output.work_type,
+      output.output_path,
+      output.framework_id,
+      property
+    );
+
+    const filename = `ElevatorIQ_${output.framework_id}_Bid_Framework.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(output.document_text);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.send(pdfBuffer);
+
   } catch (err) {
     console.error('[ScopeGenerator] Download error:', err);
-    res.status(500).json({ error: 'Download failed' });
+    res.status(500).json({ error: 'Download failed', details: err.message });
   }
 });
 
