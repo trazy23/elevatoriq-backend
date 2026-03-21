@@ -30,7 +30,7 @@ const allowedOrigins = Array.from(new Set([
 // CORS
 app.use(cors({
   origin: allowedOrigins,
-  methods: ['GET', 'POST', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key'],
 }));
 
@@ -57,6 +57,7 @@ const promptRouter = require('./src/routes/prompt');
 const invoiceRouter = require('./src/routes/invoice');
 const adminRouter = require('./src/routes/admin');
 const { router: paymentsRouter, handleStripeWebhook } = require('./src/routes/payments');
+const scopeGeneratorRouter = require('./src/routes/scope-generator');
 
 // Stripe webhook — MUST use raw body, registered before express.json()
 app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
@@ -68,6 +69,7 @@ app.use('/api/prompt', promptRouter);
 app.use('/api/invoice', invoiceRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/payments', paymentsRouter);
+app.use('/api/v1/scope-generator', scopeGeneratorRouter);
 
 // Health checks
 app.get('/health', (req, res) => {
