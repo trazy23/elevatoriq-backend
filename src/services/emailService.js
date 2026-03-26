@@ -53,7 +53,7 @@ async function sendReport(toEmail, pdfBuffer, reviewType, downloadToken, recipie
     attachments: [
       {
         filename: 'ElevatorIQ_Report.pdf',
-        content: Buffer.isBuffer(pdfBuffer) ? pdfBuffer.toString('base64') : pdfBuffer,
+        content: Buffer.from(pdfBuffer).toString('base64'),
       },
     ],
   });
