@@ -261,6 +261,25 @@ async function processCase(caseId) {
       extractionId = await saveExtraction(caseId, analysisResult);
     }
 
+    // 6b. Parse ElevatorIQ score from extraction JSON and persist to cases table
+    let elevatoriqScore = null;
+    if (analysisResult.extractionJson) {
+      try {
+        const extData = JSON.parse(analysisResult.extractionJson);
+        const raw = extData.elevatoriq_score;
+        if (raw !== null && raw !== undefined) {
+          const parsed = Math.round(Number(raw));
+          if (!isNaN(parsed)) {
+            elevatoriqScore = Math.max(0, Math.min(100, parsed));
+            await db.query(`UPDATE cases SET elevatoriq_score=$2 WHERE id=$1`, [caseId, elevatoriqScore]);
+            console.log(`[Worker] ElevatorIQ Score for case ${caseId}: ${elevatoriqScore}`);
+          }
+        }
+      } catch (err) {
+        console.warn(`[Worker] Score parse failed for ${caseId}:`, err.message);
+      }
+    }
+
     // 7. Persist structured report JSON artifact (non-blocking)
     let structuredReportPath = null;
     try {
@@ -274,7 +293,7 @@ async function processCase(caseId) {
 
     // 9. Generate PDF with QR code pointing to the download URL
     const { key: pdfKey, buffer: pdfBuffer } = await pdfService.generateAndUploadPDF(
-      analysisResult.reportBody, caseId, caseRow.review_type, token
+      analysisResult.reportBody, caseId, caseRow.review_type, token, elevatoriqScore
     );
     await db.query(
       `INSERT INTO reports (case_id, storage_path, download_token) VALUES ($1,$2,$3)`,

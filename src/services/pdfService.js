@@ -154,9 +154,70 @@ function formatBody(raw) {
   return html;
 }
 
+// ─── Score gauge SVG (dynamic needle position) ───────────────────────────────
+
+function scoreColor(score) {
+  if (score == null) return '#6F7478';
+  if (score >= 80) return '#00A066';
+  if (score >= 50) return '#E8A840';
+  return '#E85D5D';
+}
+
+function scoreLabel(score) {
+  if (score == null) return 'Analysis Complete';
+  if (score >= 80) return 'High Performance';
+  if (score >= 50) return 'Moderate Inefficiencies';
+  return 'High Risk';
+}
+
+function scoreDescription(score) {
+  if (score == null) return 'Review the findings below for a detailed breakdown.';
+  if (score >= 80) return 'System is operating efficiently with no significant cost or risk issues identified.';
+  if (score >= 50) return 'Some inefficiencies detected that may result in unnecessary costs or performance risks.';
+  return 'Significant issues identified that could lead to excess costs, risk exposure, or poor system performance.';
+}
+
+function buildScoreGaugeSvg(score, size) {
+  size = size || 110;
+  const height = Math.round(size * (15 / 26));
+  const cx = 16, cy = 21.5, r = 11;
+  const p = score != null ? Math.max(0, Math.min(100, score)) / 100 : 0.5;
+  const angle = Math.PI * (1 - p);
+
+  // Needle tip on the arc
+  const tipX = (cx + r * Math.cos(angle)).toFixed(2);
+  const tipY = (cy - r * Math.sin(angle)).toFixed(2);
+
+  // Tapered needle base — two points perpendicular to needle direction near pivot
+  const perpAngle = angle + Math.PI / 2;
+  const baseW = 0.75;
+  const b1x = (cx + baseW * Math.cos(perpAngle)).toFixed(2);
+  const b1y = (cy - baseW * Math.sin(perpAngle)).toFixed(2);
+  const b2x = (cx - baseW * Math.cos(perpAngle)).toFixed(2);
+  const b2y = (cy + baseW * Math.sin(perpAngle)).toFixed(2);
+
+  const needle = score != null ? scoreColor(score) : '#BFC6CB';
+  const arc = '#00A066';
+
+  return `<svg width="${size}" height="${height}" viewBox="3 9 26 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="pdf-arc-grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="${arc}" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="${arc}" stop-opacity="0.95"/>
+    </linearGradient>
+  </defs>
+  <path d="M 5 21.5 A 11 11 0 0 1 27 21.5" stroke="url(#pdf-arc-grad)" stroke-width="1.7" stroke-linecap="round"/>
+  <line x1="6.5" y1="16" x2="8.6" y2="17.3" stroke="${arc}" stroke-width="1.3" stroke-linecap="round" opacity="0.45"/>
+  <line x1="16" y1="10.5" x2="16" y2="13" stroke="${arc}" stroke-width="1.5" stroke-linecap="round" opacity="0.65"/>
+  <line x1="25.5" y1="16" x2="23.4" y2="17.3" stroke="${arc}" stroke-width="1.3" stroke-linecap="round" opacity="0.45"/>
+  <path d="M ${b1x} ${b1y} L ${tipX} ${tipY} L ${b2x} ${b2y} Z" fill="${needle}" opacity="0.95"/>
+  <circle cx="16" cy="21.5" r="1.5" fill="${needle}"/>
+</svg>`;
+}
+
 // ─── Cover page HTML ──────────────────────────────────────────────────────────
 
-async function buildCoverPage(label, date, downloadUrl) {
+async function buildCoverPage(label, date, downloadUrl, score) {
   let qrDataUrl = '';
   try {
     qrDataUrl = await QRCode.toDataURL(downloadUrl, {
@@ -184,6 +245,20 @@ async function buildCoverPage(label, date, downloadUrl) {
         <div class="cover-date">${escapeHtml(date)}</div>
 
         <div class="cover-divider"></div>
+
+        ${score != null ? `
+        <div class="cover-score-block" style="border-left-color:${scoreColor(score)}">
+          <div class="cover-score-eyebrow">ElevatorIQ Score</div>
+          <div class="cover-score-header">
+            <div class="cover-score-gauge">${buildScoreGaugeSvg(score, 100)}</div>
+            <div class="cover-score-right">
+              <div class="cover-score-number" style="color:${scoreColor(score)}">${score}</div>
+              <div class="cover-score-label" style="color:${scoreColor(score)}">${scoreLabel(score)}</div>
+            </div>
+          </div>
+          <div class="cover-score-desc">${escapeHtml(scoreDescription(score))}</div>
+        </div>
+        ` : ''}
 
         <div class="cover-trust-row">
           <div class="cover-trust-item">
@@ -232,11 +307,11 @@ async function buildCoverPage(label, date, downloadUrl) {
 
 // ─── Full HTML document ───────────────────────────────────────────────────────
 
-async function wrapInHTML(reportBody, reviewType, downloadUrl) {
+async function wrapInHTML(reportBody, reviewType, downloadUrl, score) {
   const label = formatReviewLabel(reviewType);
   const date  = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const bodyHtml  = formatBody(reportBody);
-  const coverHtml = await buildCoverPage(label, date, downloadUrl || `https://${BRAND.domain}`);
+  const coverHtml = await buildCoverPage(label, date, downloadUrl || `https://${BRAND.domain}`, score != null ? score : null);
 
   return `<!DOCTYPE html>
 <html>
@@ -248,7 +323,7 @@ async function wrapInHTML(reportBody, reviewType, downloadUrl) {
 :root {
   --eiq-ink: #0F1112;
   --eiq-ink-mid: #111214;
-  --eiq-accent: #00B77A;
+  --eiq-accent: #00A066;
   --eiq-white: #FFFFFF;
   --eiq-body: #33363A;
   --eiq-muted: #6F7478;
@@ -286,7 +361,7 @@ body { font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 10.5pt; co
   font-size: 14px; color: rgba(255,255,255,0.55); margin-top: 4px; font-style: italic;
 }
 .cover-accent-bar {
-  background: #00B77A; height: 4px;
+  background: #00A066; height: 4px;
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
 
@@ -295,7 +370,7 @@ body { font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 10.5pt; co
   align-items: flex-start; padding: 0 72px 32px;
 }
 .cover-report-label {
-  font-size: 12px; font-weight: 700; color: #00B77A; letter-spacing: 0.18em;
+  font-size: 12px; font-weight: 700; color: #00A066; letter-spacing: 0.18em;
   text-transform: uppercase; margin-top: 56px;
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
@@ -308,7 +383,7 @@ body { font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 10.5pt; co
   font-size: 14px; color: #6F7478; margin-top: 14px;
 }
 .cover-divider {
-  width: 58px; height: 4px; background: #00B77A;
+  width: 58px; height: 4px; background: #00A066;
   margin-top: 18px; margin-bottom: 34px;
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
@@ -317,7 +392,7 @@ body { font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 10.5pt; co
 }
 .cover-trust-item { display: flex; align-items: center; gap: 10px; }
 .cover-trust-icon {
-  width: 36px; height: 36px; background: #00B77A; border-radius: 50%;
+  width: 36px; height: 36px; background: #00A066; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
@@ -325,6 +400,38 @@ body { font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 10.5pt; co
 .cover-trust-icon svg { width: 18px; height: 18px; }
 .cover-trust-text {
   font-size: 14px; color: #333637; line-height: 1.4; font-weight: 500;
+}
+
+.cover-score-block {
+  margin-top: 24px; margin-bottom: 28px;
+  padding: 18px 22px;
+  background: #F8F9FA;
+  border-radius: 10px;
+  border-left: 4px solid #00A066;
+  max-width: 460px;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.cover-score-eyebrow {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.14em; color: #6F7478; margin-bottom: 10px;
+}
+.cover-score-header {
+  display: flex; align-items: center; gap: 16px; margin-bottom: 10px;
+}
+.cover-score-gauge { flex-shrink: 0; }
+.cover-score-right { display: flex; flex-direction: column; justify-content: center; }
+.cover-score-number {
+  font-family: 'Montserrat', Helvetica, Arial, sans-serif;
+  font-size: 44px; font-weight: 800; line-height: 1;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.cover-score-label {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; margin-top: 5px;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.cover-score-desc {
+  font-size: 12px; color: #6F7478; line-height: 1.55;
 }
 
 .cover-qr-section {
@@ -347,7 +454,7 @@ body { font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 10.5pt; co
   font-family: 'Montserrat', Helvetica, Arial, sans-serif;
   font-size: 15pt; font-weight: 800; color: white; letter-spacing: -0.02em;
 }
-.cover-footer-logo .brand-wordmark-accent { color: #00B77A; }
+.cover-footer-logo .brand-wordmark-accent { color: #00A066; }
 .cover-footer-tag { font-size: 8pt; color: #6F7478; font-style: italic; }
 .cover-footer-right { font-size: 7.5pt; color: #6F7478; }
 
@@ -362,10 +469,10 @@ body { font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 10.5pt; co
   font-family: 'Montserrat', Helvetica, Arial, sans-serif;
   font-size: 15pt; font-weight: 800; color: white; letter-spacing: -0.02em;
 }
-.report-header-logo .brand-wordmark-accent { color: #00B77A; }
+.report-header-logo .brand-wordmark-accent { color: #00A066; }
 .report-header-right { font-size: 8.5pt; color: #6F7478; text-align: right; line-height: 1.6; }
 .report-accent {
-  background: #00B77A; height: 4px;
+  background: #00A066; height: 4px;
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
 
@@ -385,7 +492,7 @@ p { margin: 6px 0; color: var(--eiq-body); font-family: 'Inter', Helvetica, Aria
 }
 .section-number {
   font-family: 'Montserrat', Helvetica, Arial, sans-serif;
-  font-size: 24pt; font-weight: 800; color: #00B77A;
+  font-size: 24pt; font-weight: 800; color: #00A066;
   line-height: 1; flex-shrink: 0; letter-spacing: -1px;
   margin-top: -4px;
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
@@ -419,7 +526,7 @@ li {
   padding-left: 16px; position: relative;
 }
 li::before {
-  content: '●'; color: #00B77A; position: absolute; left: 0; font-size: 8pt;
+  content: '●'; color: #00A066; position: absolute; left: 0; font-size: 8pt;
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
 li strong { color: #111214; }
@@ -463,7 +570,7 @@ li strong { color: #111214; }
   font-family: 'Montserrat', Helvetica, Arial, sans-serif;
   font-size: 14pt; font-weight: 800; color: white; letter-spacing: -0.02em;
 }
-.footer-logo .brand-wordmark-accent { color: #00B77A; }
+.footer-logo .brand-wordmark-accent { color: #00A066; }
 .footer-tagline { font-size: 8pt; color: #6F7478; font-style: italic; margin-top: 3px; }
 .footer-right { text-align: right; font-size: 8pt; color: #6F7478; line-height: 1.8; }
 .footer-disclaimer {
@@ -577,8 +684,8 @@ async function getBrowserArgs() {
   };
 }
 
-async function generatePDF(reportBody, caseId, reviewType, downloadUrl) {
-  const html = await wrapInHTML(reportBody, reviewType, downloadUrl);
+async function generatePDF(reportBody, caseId, reviewType, downloadUrl, score) {
+  const html = await wrapInHTML(reportBody, reviewType, downloadUrl, score);
   let browser;
   try {
     const launchArgs = await getBrowserArgs();
@@ -611,11 +718,11 @@ async function generatePDF(reportBody, caseId, reviewType, downloadUrl) {
   }
 }
 
-async function generateAndUploadPDF(reportBody, caseId, reviewType, downloadToken) {
+async function generateAndUploadPDF(reportBody, caseId, reviewType, downloadToken, score) {
   const downloadUrl = downloadToken
     ? `https://${BRAND.domain}/api/reports/download/${downloadToken}`
     : `https://${BRAND.domain}`;
-  const pdf = await generatePDF(reportBody, caseId, reviewType, downloadUrl);
+  const pdf = await generatePDF(reportBody, caseId, reviewType, downloadUrl, score);
   const key = `reports/${caseId}.pdf`;
   await storageService.uploadBuffer(pdf, key, 'application/pdf');
   return { key, buffer: pdf };

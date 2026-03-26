@@ -207,7 +207,7 @@ router.get('/:id/output', async (req, res) => {
     const { id } = req.params;
 
     const caseResult = await db.query(
-      'SELECT id, review_type, status, customer_email, created_at, completed_at FROM cases WHERE id=$1',
+      'SELECT id, review_type, status, customer_email, created_at, completed_at, elevatoriq_score FROM cases WHERE id=$1',
       [id]
     );
     if (!caseResult.rows.length) return res.status(404).json({ error: 'Case not found' });

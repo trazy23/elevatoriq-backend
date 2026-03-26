@@ -499,13 +499,19 @@ After your structured report, output the data extraction section:
 [Your complete structured report following the template above]
 
 ---EXTRACTION_JSON---
-{"schema_version":"1.2","module":"${getModule(reviewType)}","state":null,"market":null,"equipment_type":null,"contract_type":null,"scope_type":null,"unit_count":null,"contract_value":null,"confidence_overall":"medium","benchmark_version":"1.0","flags":[],"labor_data":[],"line_items":[],"parts_data":[],"contract_terms":{}}
+{"schema_version":"1.2","module":"${getModule(reviewType)}","state":null,"market":null,"equipment_type":null,"contract_type":null,"scope_type":null,"unit_count":null,"contract_value":null,"confidence_overall":"medium","benchmark_version":"1.0","elevatoriq_score":null,"score_label":null,"flags":[],"labor_data":[],"line_items":[],"parts_data":[],"contract_terms":{}}
 
 Field guidance:
 - contract_value: total contract price as a number (e.g. 30619), null if not stated
 - scope_type: one of "modernization", "repair", "maintenance", "new_installation", "inspection", "other"
 - state: two-letter state code (e.g. "MI"), null if not determinable
 - equipment_type: one of "hydraulic", "traction", "escalator", "mrl", "other"
+- elevatoriq_score: Integer 0–100. Score this document based on the actual findings in your report above. Rubric:
+  - 80–100 (High Performance): Pricing fair/competitive, scope complete or minor gaps, ≤1 HIGH risk flag, clean contract terms.
+  - 50–79 (Moderate Issues): Some cost exposure or inefficiencies, 2–3 HIGH flags, or scope gaps a capable owner should negotiate before signing.
+  - 0–49 (High Risk): Multiple HIGH severity flags, significant overpayment risk, major scope gaps, or seriously unfair contract terms.
+  Be calibrated to the findings — do not default to middle values. Must be an integer, not null.
+- score_label: One of "High Performance", "Moderate Inefficiencies", or "High Risk" matching the elevatoriq_score band above.
 
 Replace the JSON placeholder with actual extracted data from the documents. Valid JSON only. No markdown. No code fences.`;
 
