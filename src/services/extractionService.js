@@ -67,7 +67,7 @@ async function extractTextFromBuffer(buffer, ext, fileName = '') {
   }
 
   if (ext === '.doc') {
-    return extractLegacyDOC(buffer);
+    return await extractLegacyDOC(buffer, fileName);
   }
 
   // Unknown extension — try PDF, then plain text
@@ -114,9 +114,32 @@ async function extractDOCX(buffer) {
   return `[DOCX Document]\n\n${text}`;
 }
 
-function extractLegacyDOC(buffer) {
-  // Legacy .doc (CFB) can hang/perform poorly in DOCX parsers.
-  // Use a resilient plain-text fallback so pipeline can continue.
+async function extractLegacyDOC(buffer, fileName = '') {
+  // Try mammoth first — it handles many legacy .doc files correctly and
+  // produces clean, complete text without binary noise or truncation.
+  try {
+    const result = await withTimeout(
+      mammoth.extractRawText({ buffer }),
+      20000,
+      'DOC mammoth extraction'
+    );
+    const text = result.value
+      .replace(/\r\n/g, '\n')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+    if (text && text.replace(/\s+/g, '').length >= 100) {
+      console.log(`[Extraction] DOC mammoth success for ${fileName}: ${text.length} chars`);
+      return `[DOC Document]\n\n${text}`;
+    }
+    console.warn(`[Extraction] DOC mammoth produced sparse output, falling back to plain-text`);
+  } catch (err) {
+    console.warn(`[Extraction] DOC mammoth failed (${err.message}), falling back to plain-text`);
+  }
+
+  // Plain-text fallback: latin-1 decode + strip binary garbage.
+  // Use a generous limit — commercial terms often appear late in documents
+  // and truncating early causes inaccurate "Not Stated" findings.
   const text = buffer
     .toString('latin1')
     .replace(/[^\x20-\x7E\n\r\t]/g, ' ')
@@ -128,8 +151,7 @@ function extractLegacyDOC(buffer) {
     throw new Error('DOC appears empty — no extractable text found');
   }
 
-  // Keep prompt payload bounded for reliable model latency.
-  return `[DOC Legacy Document]\n\n${text.slice(0, 12000)}`;
+  return `[DOC Legacy Document]\n\n${text.slice(0, 60000)}`;
 }
 
 /**
