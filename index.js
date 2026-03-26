@@ -78,6 +78,23 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'ElevatorIQ Backend', version: '1.2.0' });
 });
 
+// Public queue status — returns active/waiting counts without sensitive data.
+// Used by the frontend to show queue position messaging.
+app.get('/api/queue-status', async (req, res) => {
+  try {
+    const { getQueueStatus } = require('./src/workers/analysisWorker');
+    const status = await getQueueStatus();
+    // Only expose counts publicly, not backend details
+    res.json({
+      active: status.active,
+      waiting: status.waiting,
+      concurrency: status.concurrency,
+    });
+  } catch (err) {
+    res.json({ active: 0, waiting: 0, concurrency: 2 });
+  }
+});
+
 app.get('/readyz', (req, res) => {
   const requiredForCoreApi = [
     'DATABASE_URL',

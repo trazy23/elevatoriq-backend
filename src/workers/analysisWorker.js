@@ -338,9 +338,48 @@ async function processCase(caseId) {
   }
 }
 
+// ─── Concurrency control ──────────────────────────────────────────────────────
+// Max simultaneous analyses. Each job spawns a Claude API call (~5-10 min)
+// and a Puppeteer instance (~200-400MB RAM). Keep this at 2 for safety on
+// standard Render instances; raise only if you have confirmed available RAM.
+const WORKER_CONCURRENCY = Number(process.env.WORKER_CONCURRENCY || 2);
+const WORKER_JOB_TIMEOUT_MS = Number(process.env.WORKER_JOB_TIMEOUT_MS || 15 * 60 * 1000);
+
+// ─── In-process semaphore (used when Redis/Bull is unavailable) ───────────────
+// Prevents simultaneous Puppeteer/Claude blowouts on the fallback path.
+class Semaphore {
+  constructor(limit) {
+    this._limit = limit;
+    this._active = 0;
+    this._queue = [];
+  }
+  acquire() {
+    return new Promise((resolve) => {
+      const attempt = () => {
+        if (this._active < this._limit) {
+          this._active++;
+          resolve();
+        } else {
+          this._queue.push(attempt);
+        }
+      };
+      attempt();
+    });
+  }
+  release() {
+    this._active--;
+    if (this._queue.length > 0) {
+      const next = this._queue.shift();
+      next();
+    }
+  }
+  get active() { return this._active; }
+  get waiting() { return this._queue.length; }
+}
+const fallbackSemaphore = new Semaphore(WORKER_CONCURRENCY);
+
 // Bull queue integration
 let queue = null;
-const WORKER_JOB_TIMEOUT_MS = Number(process.env.WORKER_JOB_TIMEOUT_MS || 15 * 60 * 1000);
 
 function withWorkerTimeout(caseId, work) {
   return Promise.race([
@@ -368,12 +407,15 @@ function initQueue() {
   try {
     const Bull = require('bull');
     queue = new Bull('analysis', {
-      redis: { host: process.env.REDIS_HOST || '127.0.0.1', port: 6379 }
+      redis: { host: process.env.REDIS_HOST || '127.0.0.1', port: Number(process.env.REDIS_PORT || 6379) }
     });
-    queue.process(async (job) => {
+    // Explicit concurrency — Bull defaults to 1 if omitted, which is safe but
+    // unnecessarily serializes jobs when RAM allows more. WORKER_CONCURRENCY=2
+    // lets two analyses run in parallel without blowing memory on a standard instance.
+    queue.process(WORKER_CONCURRENCY, async (job) => {
       await runCaseWithGuard(job.data.caseId);
     });
-    console.log('[Worker] Bull queue initialized');
+    console.log(`[Worker] Bull queue initialized (concurrency: ${WORKER_CONCURRENCY})`);
   } catch (err) {
     console.warn('[Worker] Bull/Redis not available, using direct processing:', err.message);
     queue = null;
@@ -390,28 +432,55 @@ async function addJob(caseId) {
       return;
     } catch (err) {
       console.warn('[Worker] Bull queue unavailable, falling back to direct processing:', err.message);
-      queue = null; // disable queue for future calls
+      queue = null;
     }
   }
-  // Fallback: process directly (fine for local dev without Redis)
-  setImmediate(() => {
-    runCaseWithGuard(caseId).catch((err) => {
-      console.error(`[Worker] Unhandled guarded run failure for case ${caseId}:`, err.message);
-    });
+  // Fallback: semaphore-limited direct processing.
+  // Without this, simultaneous submissions each spawn their own Puppeteer
+  // instance which can OOM-crash the process on memory-constrained hosts.
+  setImmediate(async () => {
+    console.log(`[Worker] Fallback semaphore: active=${fallbackSemaphore.active}, waiting=${fallbackSemaphore.waiting}`);
+    await fallbackSemaphore.acquire();
+    try {
+      await runCaseWithGuard(caseId);
+    } finally {
+      fallbackSemaphore.release();
+    }
   });
+}
+
+async function getQueueStatus() {
+  if (queue) {
+    try {
+      const [waiting, active, delayed, failed] = await Promise.all([
+        queue.getWaitingCount(),
+        queue.getActiveCount(),
+        queue.getDelayedCount(),
+        queue.getFailedCount(),
+      ]);
+      return { backend: 'bull', waiting, active, delayed, failed, concurrency: WORKER_CONCURRENCY };
+    } catch (_) { /* fall through */ }
+  }
+  return {
+    backend: 'semaphore',
+    active: fallbackSemaphore.active,
+    waiting: fallbackSemaphore.waiting,
+    concurrency: WORKER_CONCURRENCY,
+  };
 }
 
 // Only initialize Bull queue if REDIS_ENABLED is explicitly set
 if (process.env.REDIS_ENABLED === 'true') {
   initQueue();
 } else {
-  console.log('[Worker] Redis disabled — using direct processing (set REDIS_ENABLED=true to enable queue)');
+  console.log(`[Worker] Redis disabled — using semaphore fallback (concurrency: ${WORKER_CONCURRENCY}). Set REDIS_ENABLED=true to enable Bull queue.`);
 }
 
 module.exports = {
   addJob,
   processCase,
   runCaseWithGuard,
+  getQueueStatus,
   __testables: {
     computeVerbatimOverlapScore,
     isReportDeliverable,

@@ -132,6 +132,17 @@ router.get('/stats', requireAdminKey, async (req, res) => {
   }
 });
 
+// GET /api/admin/queue — Live queue depth and concurrency status
+router.get('/queue', requireAdminKey, async (req, res) => {
+  try {
+    const { getQueueStatus } = require('../workers/analysisWorker');
+    const status = await getQueueStatus();
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to get queue status', detail: err.message });
+  }
+});
+
 // POST /api/admin/cases/:id/retry — Reset a stuck/orphaned case and re-queue it
 router.post('/cases/:id/retry', requireAdminKey, async (req, res) => {
   const { id } = req.params;
