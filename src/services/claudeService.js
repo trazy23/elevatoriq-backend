@@ -181,7 +181,24 @@ Assess the proposed equipment: manufacturer, product line, drive system, control
 ═══════════════════════════════════════════════
 SECTION 4 — SCOPE REVIEW
 ═══════════════════════════════════════════════
-What's included, what's excluded, what's ambiguous. Flag any owner liability items buried in the terms.
+Output a pipe-delimited table with exactly three columns — Category, Status, Notes — covering every scope item below.
+Status must be one of: Explicitly Included | Included (Allowance) | Partially Addressed | Implied / Ambiguous | Not Addressed | Not Stated.
+Do NOT use emoji or symbols in the Status column. Do NOT add footnote tags or bracket annotations.
+
+Use this exact header row:
+| Category | Status | Notes |
+|---|---|---|
+
+Cover these categories (add others if relevant to this specific proposal):
+Controller & Controls | Door Equipment | Cab Interior | Hydraulic Power Unit | Jack Assembly & Excavation | Ropes / Traveling Cable | Pit Equipment | Safety Devices | Electrical & Wiring | Fire Service | Machine Room | Demolition & Disposal | Permits & Inspections | Testing & Acceptance | Temporary Services | Warranty | Owner Responsibilities | Payment Terms | Schedule & Phasing | Change Order Rates | Liquidated Damages
+
+After the table, add two subsections with plain text (no table):
+
+Notable Scope Inclusions (Positive):
+- Bullet each positive inclusion worth calling out.
+
+Notable Scope Gaps:
+For each gap, write it as a numbered item with a bold title, then a paragraph explaining the risk and what the owner should ask for. Do not include any bracket tags or backtick annotations.
 
 ═══════════════════════════════════════════════
 SECTION 5 — RISK SIGNALS

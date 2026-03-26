@@ -50,18 +50,96 @@ function inlineFormat(str) {
   return escapeHtml(str).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 }
 
+/** Strip internal annotation tags like `[Flag: ...]` and `[VALIDATE — ...]` */
+function stripAnnotations(str) {
+  return str
+    .replace(/`\[[^\]]*\]`/g, '')   // `[Flag: ...]`, `[VALIDATE — ...]`, etc.
+    .replace(/\s{2,}/g, ' ')         // collapse extra whitespace left behind
+    .trim();
+}
+
+/** Determine status chip class from status text */
+function scopeStatusClass(status) {
+  const s = status.toLowerCase();
+  if (s.includes('not addressed') || s.includes('not stated') || s.includes('not included')) return 'scope-missing';
+  if (s.includes('ambiguous') || s.includes('implied') || s.includes('partial')) return 'scope-partial';
+  if (s.includes('included') || s.includes('explicitly')) return 'scope-included';
+  return 'scope-neutral';
+}
+
+/** Render a collected pipe-table rows array as an HTML scope table */
+function renderPipeTable(rows) {
+  // rows = array of string arrays (each cell already trimmed)
+  // Filter out pure-separator rows (|---|---|)
+  const dataRows = rows.filter(r => !r.every(c => /^[-:]+$/.test(c)));
+  if (dataRows.length < 2) return '';
+
+  const header = dataRows[0];
+  const body   = dataRows.slice(1);
+
+  const isScopeTable = header.some(h => /category|item/i.test(h));
+  const statusColIdx = header.findIndex(h => /status/i.test(h));
+  const notesColIdx  = header.findIndex(h => /notes|detail/i.test(h));
+
+  let t = '<table class="scope-table"><thead><tr>';
+  header.forEach(h => { t += `<th>${escapeHtml(h)}</th>`; });
+  t += '</tr></thead><tbody>';
+
+  body.forEach(row => {
+    t += '<tr>';
+    row.forEach((cell, i) => {
+      const clean = stripAnnotations(cell);
+      if (isScopeTable && i === statusColIdx) {
+        const cls = scopeStatusClass(clean);
+        // Strip emoji prefixes (✓ ⚠ etc.) and let CSS handle the indicator
+        const label = clean.replace(/^[^\w\s]+\s*/, '').trim();
+        t += `<td><span class="scope-chip ${cls}">${escapeHtml(label)}</span></td>`;
+      } else {
+        t += `<td>${inlineFormat(clean)}</td>`;
+      }
+    });
+    // Pad missing cells
+    for (let i = row.length; i < header.length; i++) t += '<td></td>';
+    t += '</tr>';
+  });
+
+  t += '</tbody></table>';
+  return t;
+}
+
 function formatBody(raw) {
   const lines = raw.split('\n');
   let html = '';
   let inList = false;
   let sectionCount = 0;
+  let tableBuffer = [];   // collecting pipe-table lines
 
   function closeList() {
     if (inList) { html += '</ul>'; inList = false; }
   }
 
+  function flushTable() {
+    if (tableBuffer.length === 0) return;
+    const rows = tableBuffer.map(l =>
+      l.split('|').slice(1, -1).map(c => c.trim())
+    );
+    html += renderPipeTable(rows);
+    tableBuffer = [];
+  }
+
   for (const line of lines) {
     const trimmed = line.trim();
+
+    // ── Pipe table lines — collect until the table ends
+    if (/^\|/.test(trimmed) && trimmed.endsWith('|')) {
+      closeList();
+      tableBuffer.push(trimmed);
+      continue;
+    }
+    // If we were collecting a table and hit a non-table line, flush it first
+    if (tableBuffer.length > 0) {
+      flushTable();
+    }
 
     // ── Skip decoration lines (═══) and markdown horizontal rules (---, ***)
     if (/^═{6,}/.test(trimmed) || /^[-*]{3,}$/.test(trimmed)) {
@@ -100,14 +178,14 @@ function formatBody(raw) {
     const subLabelMatch = trimmed.match(/^(Finding|Risk|Recommendation|Assessment|Confidence|Explanation|Commentary|Note):\s*(.*)/);
     if (subLabelMatch) {
       closeList();
-      html += `<p class="sub-label"><span class="sub-key">${escapeHtml(subLabelMatch[1])}:</span> ${inlineFormat(subLabelMatch[2])}</p>`;
+      html += `<p class="sub-label"><span class="sub-key">${escapeHtml(subLabelMatch[1])}:</span> ${inlineFormat(stripAnnotations(subLabelMatch[2]))}</p>`;
       continue;
     }
 
     // ── Bullet points
     if (/^[-•*]\s+/.test(trimmed)) {
       if (!inList) { html += '<ul>'; inList = true; }
-      const content = trimmed.replace(/^[-•*]\s+/, '');
+      const content = stripAnnotations(trimmed.replace(/^[-•*]\s+/, ''));
       // Bold the part before a colon if present (e.g. "- TK Elevator: includes...")
       const colonIdx = content.indexOf(':');
       if (colonIdx > 0 && colonIdx < 40) {
@@ -146,10 +224,11 @@ function formatBody(raw) {
       continue;
     }
 
-    // ── Normal paragraph — bold inline **text**
-    html += `<p>${inlineFormat(trimmed)}</p>`;
+    // ── Normal paragraph — bold inline **text**; strip backtick annotations
+    html += `<p>${inlineFormat(stripAnnotations(trimmed))}</p>`;
   }
 
+  flushTable();
   closeList();
   return html;
 }
@@ -558,6 +637,35 @@ li strong { color: #111214; }
 
 .sub-label { margin: 4px 0 4px 18px; color: var(--eiq-body); font-size: 10pt; }
 .sub-key { font-weight: 700; color: #111214; }
+
+/* ══════════ SCOPE TABLE ══════════ */
+.scope-table {
+  width: 100%; border-collapse: collapse; margin: 14px 0 18px 0;
+  font-size: 9.5pt; table-layout: fixed;
+}
+.scope-table thead tr { background: #1A1F2A; }
+.scope-table thead th {
+  color: #ffffff; font-weight: 700; text-transform: uppercase;
+  font-size: 8pt; letter-spacing: 0.04em; padding: 8px 10px; text-align: left;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.scope-table thead th:nth-child(1) { width: 28%; }
+.scope-table thead th:nth-child(2) { width: 22%; }
+.scope-table thead th:nth-child(3) { width: 50%; }
+.scope-table tbody tr { border-bottom: 1px solid #E8EAED; }
+.scope-table tbody tr:nth-child(even) { background: #F8F9FA; }
+.scope-table tbody td {
+  padding: 8px 10px; vertical-align: top; color: #2A2F36; line-height: 1.45;
+}
+.scope-chip {
+  display: inline-block; padding: 2px 8px; border-radius: 3px;
+  font-size: 8pt; font-weight: 700; white-space: nowrap;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.scope-included { background: #D4F0E4; color: #00704A; }
+.scope-partial  { background: #FDF0D4; color: #9A6000; }
+.scope-missing  { background: #FDDEDE; color: #B03030; }
+.scope-neutral  { background: #EAECEF; color: #4A5060; }
 
 /* ══════════ REPORT FOOTER ══════════ */
 .report-footer {
