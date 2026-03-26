@@ -14,8 +14,8 @@ const COLORS = {
   inkMid: '#111214',
   inkSoft: '#1A1F2A',
   // Brand accent
-  accent: '#00B77A',
-  accentHover: '#00CC84',
+  accent: '#00A066',
+  accentHover: '#00B876',
   // Text
   white: '#FFFFFF',
   offWhite: '#F5F6F8',
