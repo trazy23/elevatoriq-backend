@@ -509,6 +509,7 @@ Hard requirements:
 - Quote only short snippets when needed, then explain implications.
 - Make clear recommendations tied to risk/price/scope tradeoffs.
 - CRITICAL: Only reference specific state elevator codes (e.g. Michigan Act 227, ASME A17.1 as adopted by a state) if the submitted documents explicitly indicate the project state or jurisdiction. If state cannot be determined from the documents, do not cite state-specific code — reference only general ASME A17.1 or OSHA standards that apply nationally. Never assume a state based on addresses or phone numbers alone.
+- FORMATTING: Do NOT use markdown syntax in your report. Do not use # or ## headers, do not use > blockquotes, do not use --- horizontal rules. Section headers must follow the exact format "SECTION N — TITLE" only. Plain text paragraphs and bullet points (- item) only.
 
 After your structured report, output the data extraction section:
 
@@ -523,12 +524,12 @@ Field guidance:
 - scope_type: one of "modernization", "repair", "maintenance", "new_installation", "inspection", "other"
 - state: two-letter state code (e.g. "MI"), null if not determinable
 - equipment_type: one of "hydraulic", "traction", "escalator", "mrl", "other"
-- elevatoriq_score: Integer 0–100. Score this document based on the actual findings in your report above. Rubric:
-  - 80–100 (High Performance): Pricing fair/competitive, scope complete or minor gaps, ≤1 HIGH risk flag, clean contract terms.
-  - 50–79 (Moderate Issues): Some cost exposure or inefficiencies, 2–3 HIGH flags, or scope gaps a capable owner should negotiate before signing.
-  - 0–49 (High Risk): Multiple HIGH severity flags, significant overpayment risk, major scope gaps, or seriously unfair contract terms.
-  Be calibrated to the findings — do not default to middle values. Must be an integer, not null.
-- score_label: One of "High Performance", "Moderate Inefficiencies", or "High Risk" matching the elevatoriq_score band above.
+- score_label: Assign one of exactly three values based on the findings in your report:
+  - "High Performance": Pricing fair/competitive, scope complete or only minor gaps, ≤1 HIGH risk flag, clean contract terms.
+  - "Moderate Inefficiencies": Some cost exposure or scope gaps, 2–3 HIGH flags, items the owner should negotiate before signing.
+  - "High Risk": Multiple HIGH severity flags, significant cost exposure, major scope gaps, or seriously unfair terms.
+  Must not be null. Choose the label that best matches the overall findings — do not default to the middle.
+- elevatoriq_score: Set to 85 if score_label is "High Performance", 60 if "Moderate Inefficiencies", 25 if "High Risk".
 
 Replace the JSON placeholder with actual extracted data from the documents. Valid JSON only. No markdown. No code fences.`;
 

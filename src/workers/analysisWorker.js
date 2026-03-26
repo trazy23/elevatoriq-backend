@@ -261,19 +261,28 @@ async function processCase(caseId) {
       extractionId = await saveExtraction(caseId, analysisResult);
     }
 
-    // 6b. Parse ElevatorIQ score from extraction JSON and persist to cases table
+    // 6b. Parse ElevatorIQ assessment from extraction JSON and persist to cases table
+    // score_label is the source of truth (High Performance / Moderate Inefficiencies / High Risk)
+    // elevatoriq_score is derived: 85 / 60 / 25 — used only for gauge position, never shown as a number
+    const LABEL_TO_SCORE = { 'High Performance': 85, 'Moderate Inefficiencies': 60, 'High Risk': 25 };
     let elevatoriqScore = null;
     if (analysisResult.extractionJson) {
       try {
         const extData = JSON.parse(analysisResult.extractionJson);
-        const raw = extData.elevatoriq_score;
-        if (raw !== null && raw !== undefined) {
-          const parsed = Math.round(Number(raw));
-          if (!isNaN(parsed)) {
-            elevatoriqScore = Math.max(0, Math.min(100, parsed));
-            await db.query(`UPDATE cases SET elevatoriq_score=$2 WHERE id=$1`, [caseId, elevatoriqScore]);
-            console.log(`[Worker] ElevatorIQ Score for case ${caseId}: ${elevatoriqScore}`);
+        // Prefer score_label; fall back to numeric elevatoriq_score if label absent
+        const label = extData.score_label;
+        if (label && LABEL_TO_SCORE[label] !== undefined) {
+          elevatoriqScore = LABEL_TO_SCORE[label];
+        } else {
+          const raw = extData.elevatoriq_score;
+          if (raw !== null && raw !== undefined) {
+            const parsed = Math.round(Number(raw));
+            if (!isNaN(parsed)) elevatoriqScore = Math.max(0, Math.min(100, parsed));
           }
+        }
+        if (elevatoriqScore !== null) {
+          await db.query(`UPDATE cases SET elevatoriq_score=$2 WHERE id=$1`, [caseId, elevatoriqScore]);
+          console.log(`[Worker] ElevatorIQ Assessment for case ${caseId}: ${label || elevatoriqScore}`);
         }
       } catch (err) {
         console.warn(`[Worker] Score parse failed for ${caseId}:`, err.message);

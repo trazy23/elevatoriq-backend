@@ -128,7 +128,14 @@ function formatBody(raw) {
   }
 
   for (const line of lines) {
-    const trimmed = line.trim();
+    let trimmed = line.trim();
+
+    // ── Strip markdown header prefixes (##, #) — Claude sometimes outputs these
+    const mdHeaderMatch = trimmed.match(/^#{1,3}\s+(.*)/);
+    if (mdHeaderMatch) trimmed = mdHeaderMatch[1].trim();
+
+    // ── Strip blockquote prefix (> text) — render as normal paragraph
+    if (trimmed.startsWith('> ')) trimmed = trimmed.slice(2).trim();
 
     // ── Pipe table lines — collect until the table ends
     if (/^\|/.test(trimmed) && trimmed.endsWith('|')) {
@@ -327,11 +334,10 @@ async function buildCoverPage(label, date, downloadUrl, score) {
 
         ${score != null ? `
         <div class="cover-score-block" style="border-left-color:${scoreColor(score)}">
-          <div class="cover-score-eyebrow">ElevatorIQ Score</div>
+          <div class="cover-score-eyebrow">ElevatorIQ Assessment</div>
           <div class="cover-score-header">
-            <div class="cover-score-gauge">${buildScoreGaugeSvg(score, 100)}</div>
+            <div class="cover-score-gauge">${buildScoreGaugeSvg(score, 90)}</div>
             <div class="cover-score-right">
-              <div class="cover-score-number" style="color:${scoreColor(score)}">${score}</div>
               <div class="cover-score-label" style="color:${scoreColor(score)}">${scoreLabel(score)}</div>
             </div>
           </div>
@@ -499,14 +505,10 @@ body { font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 10.5pt; co
 }
 .cover-score-gauge { flex-shrink: 0; }
 .cover-score-right { display: flex; flex-direction: column; justify-content: center; }
-.cover-score-number {
-  font-family: 'Montserrat', Helvetica, Arial, sans-serif;
-  font-size: 44px; font-weight: 800; line-height: 1;
-  -webkit-print-color-adjust: exact; print-color-adjust: exact;
-}
 .cover-score-label {
-  font-size: 12px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.1em; margin-top: 5px;
+  font-family: 'Montserrat', Helvetica, Arial, sans-serif;
+  font-size: 18px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.06em; line-height: 1.2;
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
 .cover-score-desc {
