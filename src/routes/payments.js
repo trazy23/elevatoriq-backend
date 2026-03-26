@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { addJob } = require('../workers/analysisWorker');
+const { isValidAccessCode: _isValidAccessCode } = require('../services/accessCodeService');
 require('dotenv').config();
 
 // Lazy-init Stripe so the server still boots if STRIPE_SECRET_KEY is not yet set
@@ -40,19 +41,8 @@ const PLANS = {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-// Returns array of valid access codes from env var ACCESS_CODES (comma-separated)
-// e.g. ACCESS_CODES=PILOT2026,BETA123,TREYZTEST
-function getValidCodes() {
-  const raw = process.env.ACCESS_CODES || '';
-  return raw.split(',').map(c => c.trim().toUpperCase()).filter(Boolean);
-}
-
-function isValidAccessCode(code) {
-  if (!code) return false;
-  const valid = getValidCodes();
-  if (!valid.length) return false;
-  return valid.includes(code.trim().toUpperCase());
-}
+// Access code validation delegated to shared service
+const isValidAccessCode = _isValidAccessCode;
 
 async function getAccessLevel(email, code) {
   const normalizedEmail = (email || '').toLowerCase().trim();

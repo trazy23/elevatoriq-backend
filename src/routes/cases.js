@@ -7,6 +7,7 @@ const { getStructuredReportKey } = require('../utils/reportArtifacts');
 const { inferReviewTypeFromDocuments } = require('../services/documentTypeService');
 const { sendSubmissionAlert } = require('../services/emailService');
 const { checkFreeEligibility } = require('../services/freeEligibilityService');
+const { isValidAccessCode } = require('../services/accessCodeService');
 
 // Extract real client IP — respects X-Forwarded-For from Render/proxies
 function getClientIp(req) {
@@ -60,6 +61,7 @@ router.post('/', submissionLimiter, async (req, res) => {
       company,
       name,
       role,
+      access_code,
     } = req.body;
     const resolvedRecipientEmail =
       normalizeEmail(customer_email)
@@ -104,7 +106,8 @@ router.post('/', submissionLimiter, async (req, res) => {
     const clientIp = getClientIp(req);
 
     // Free tier abuse check — email normalization + IP + disposable domain
-    if (paymentStatus === 'free') {
+    // Bypass entirely for valid access codes (pilot users, internal testing, gifted access)
+    if (paymentStatus === 'free' && !isValidAccessCode(access_code)) {
       const eligibility = await checkFreeEligibility(resolvedRecipientEmail, clientIp);
       if (!eligibility.eligible) {
         return res.status(403).json({
