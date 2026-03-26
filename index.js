@@ -5,6 +5,8 @@ const path = require('path');
 const fs = require('fs');
 const cron = require('node-cron');
 const { runAggregation } = require('./src/workers/aggregationJob');
+const db = require('./src/db');
+const { addJob } = require('./src/workers/analysisWorker');
 
 const app = express();
 
@@ -161,6 +163,37 @@ if (process.env.DATABASE_URL) {
   console.log('[Cron] Aggregation job scheduled for 3:00 AM CT daily');
 }
 
+// ─── Startup recovery: re-queue any cases orphaned by a previous deployment ──
+// Cases stuck in 'processing' or 'pending' with no completed report after
+// STALE_THRESHOLD minutes are assumed to have been killed mid-flight.
+async function recoverOrphanedJobs() {
+  const STALE_THRESHOLD_MINUTES = 20;
+  try {
+    const result = await db.query(
+      `SELECT c.id
+       FROM cases c
+       LEFT JOIN reports r ON r.case_id = c.id
+       WHERE c.status NOT IN ('complete', 'failed')
+         AND c.payment_status != 'pending_payment'
+         AND r.id IS NULL
+         AND c.created_at < NOW() - INTERVAL '${STALE_THRESHOLD_MINUTES} minutes'`,
+    );
+    if (result.rows.length === 0) {
+      console.log('[Startup] No orphaned jobs found.');
+      return;
+    }
+    console.log(`[Startup] Recovering ${result.rows.length} orphaned job(s)...`);
+    for (const row of result.rows) {
+      console.log(`[Startup] Re-queuing case: ${row.id}`);
+      // Reset status so the worker can update it properly
+      await db.query(`UPDATE cases SET status='pending' WHERE id=$1`, [row.id]);
+      await addJob(row.id);
+    }
+  } catch (err) {
+    console.warn('[Startup] Orphan recovery check failed (non-fatal):', err.message);
+  }
+}
+
 // Listen locally for development
 if (require.main === module) {
   // Render will set PORT automatically
@@ -169,5 +202,7 @@ if (require.main === module) {
     console.log(`[ElevatorIQ] Backend running on port ${PORT}`);
     console.log(`[ElevatorIQ] Health: http://localhost:${PORT}/health`);
     console.log(`[ElevatorIQ] Readyz: http://localhost:${PORT}/readyz`);
+    // Delay slightly so DB connections are warm before scanning
+    setTimeout(recoverOrphanedJobs, 5000);
   });
 }
