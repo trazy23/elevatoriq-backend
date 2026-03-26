@@ -13,12 +13,27 @@ const storageService = require('./storageService');
 const { BRAND, COLORS, TYPOGRAPHY, logoWordmarkHtml } = require('./reportBranding');
 
 const REVIEW_LABELS = {
+  // Single-doc bid reviews
+  repair_bid:                  'Repair Bid Review',
+  maintenance_bid:             'Maintenance Contract Review',
+  modernization_bid:           'Modernization Bid Review',
+  new_construction_bid:        'New Construction Bid Review',
+  // Comparisons
+  bid_comparison:              'New Construction Bid Comparison',
   modernization_comparison:    'Modernization Bid Comparison',
   maintenance_bid_comparison:  'Maintenance Bid Comparison',
+  single_modernization:        'Single Bid Review',
+  // Contract & invoice
   invoice_review:              'Invoice & Billing Review',
   contract_coverage:           'Contract Coverage Analysis',
-  single_modernization:        'Single Bid Review',
 };
+
+/** Fallback: snake_case → Title Case for any unmapped type */
+function formatReviewLabel(reviewType) {
+  if (!reviewType) return 'Document Analysis';
+  return REVIEW_LABELS[reviewType] ||
+    reviewType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
 
 // ─── Text → HTML formatter ────────────────────────────────────────────────────
 
@@ -28,6 +43,11 @@ function escapeHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/** Escape HTML then convert **bold** markdown to <strong> tags */
+function inlineFormat(str) {
+  return escapeHtml(str).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 }
 
 function formatBody(raw) {
@@ -43,8 +63,8 @@ function formatBody(raw) {
   for (const line of lines) {
     const trimmed = line.trim();
 
-    // ── Skip decoration lines (═══)
-    if (/^═{6,}/.test(trimmed)) {
+    // ── Skip decoration lines (═══) and markdown horizontal rules (---, ***)
+    if (/^═{6,}/.test(trimmed) || /^[-*]{3,}$/.test(trimmed)) {
       closeList();
       continue;
     }
@@ -80,7 +100,7 @@ function formatBody(raw) {
     const subLabelMatch = trimmed.match(/^(Finding|Risk|Recommendation|Assessment|Confidence|Explanation|Commentary|Note):\s*(.*)/);
     if (subLabelMatch) {
       closeList();
-      html += `<p class="sub-label"><span class="sub-key">${escapeHtml(subLabelMatch[1])}:</span> ${escapeHtml(subLabelMatch[2])}</p>`;
+      html += `<p class="sub-label"><span class="sub-key">${escapeHtml(subLabelMatch[1])}:</span> ${inlineFormat(subLabelMatch[2])}</p>`;
       continue;
     }
 
@@ -93,9 +113,9 @@ function formatBody(raw) {
       if (colonIdx > 0 && colonIdx < 40) {
         const key = content.substring(0, colonIdx);
         const val = content.substring(colonIdx + 1);
-        html += `<li><strong>${escapeHtml(key)}:</strong>${escapeHtml(val)}</li>`;
+        html += `<li><strong>${escapeHtml(key)}:</strong>${inlineFormat(val)}</li>`;
       } else {
-        html += `<li>${escapeHtml(content)}</li>`;
+        html += `<li>${inlineFormat(content)}</li>`;
       }
       continue;
     }
@@ -127,8 +147,7 @@ function formatBody(raw) {
     }
 
     // ── Normal paragraph — bold inline **text**
-    const withBold = escapeHtml(trimmed).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    html += `<p>${withBold}</p>`;
+    html += `<p>${inlineFormat(trimmed)}</p>`;
   }
 
   closeList();
@@ -214,7 +233,7 @@ async function buildCoverPage(label, date, downloadUrl) {
 // ─── Full HTML document ───────────────────────────────────────────────────────
 
 async function wrapInHTML(reportBody, reviewType, downloadUrl) {
-  const label = REVIEW_LABELS[reviewType] || reviewType;
+  const label = formatReviewLabel(reviewType);
   const date  = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const bodyHtml  = formatBody(reportBody);
   const coverHtml = await buildCoverPage(label, date, downloadUrl || `https://${BRAND.domain}`);
@@ -520,7 +539,7 @@ function generateFallbackPDF(reportBody, reviewType, downloadUrl) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      const label = REVIEW_LABELS[reviewType] || reviewType;
+      const label = formatReviewLabel(reviewType);
       doc.fontSize(20).text(BRAND.name, { align: 'left' });
       doc.moveDown(0.3);
       doc.fontSize(11).fillColor('#666666').text(BRAND.tagline);
