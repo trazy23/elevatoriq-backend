@@ -5,8 +5,27 @@ const db = require('../db');
 const storageService = require('../services/storageService');
 const storageServiceMock = require('../services/storageService-mock');
 const { detectDocumentType } = require('../services/documentTypeService');
+const { extractTextFromBuffer } = require('../services/extractionService');
 
 const path = require('path');
+
+/**
+ * Check if a PDF is image-based (scanned) with no extractable text.
+ * Returns { isScanned: bool, reason: string }
+ */
+async function checkPdfReadability(buffer) {
+  try {
+    const text = await extractTextFromBuffer(buffer, '.pdf', 'readability-check');
+    const usable = text.replace(/\s+/g, '').length;
+    if (usable < 100) {
+      return { isScanned: true, reason: 'PDF contains no extractable text (fewer than 100 usable characters).' };
+    }
+    return { isScanned: false };
+  } catch (err) {
+    // extractTextFromBuffer throws when image-based or empty
+    return { isScanned: true, reason: err.message };
+  }
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -62,6 +81,21 @@ router.post('/', upload.single('file'), async (req, res) => {
   try {
     const { id } = req.params;
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
+
+    // Reject scanned/image-only PDFs before storing or billing
+    const ext = path.extname(req.file.originalname || '').toLowerCase();
+    if (ext === '.pdf') {
+      const { isScanned, reason } = await checkPdfReadability(req.file.buffer);
+      if (isScanned) {
+        return res.status(422).json({
+          code: 'scanned_pdf',
+          error: 'This PDF appears to be a scanned image with no readable text layer. ' +
+            'ElevatorIQ requires a text-native PDF to perform analysis. ' +
+            'Please request a digital copy from your vendor, or re-scan with OCR enabled.',
+          detail: reason,
+        });
+      }
+    }
 
     const record = await persistDocument({
       caseId: id,
