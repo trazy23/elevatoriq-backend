@@ -621,4 +621,27 @@ async function generateAndUploadPDF(reportBody, caseId, reviewType, downloadToke
   return { key, buffer: pdf };
 }
 
-module.exports = { generatePDF, generateAndUploadPDF, wrapInHTML };
+/**
+ * buildReportFilename — Generate a clean, descriptive PDF filename.
+ * Format: ElevatorIQ_<ReviewType>_<Company>_<YYYYMMDD>.pdf
+ * e.g.  ElevatorIQ_Repair_Bid_Review_Acme_Corp_20260326.pdf
+ */
+function buildReportFilename(reviewType, company) {
+  const label = formatReviewLabel(reviewType)
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+
+  if (company && typeof company === 'string' && company.trim().length > 0) {
+    const safeCompany = company.trim()
+      .replace(/[^a-zA-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 40);
+    return `ElevatorIQ_${label}_${safeCompany}_${date}.pdf`;
+  }
+
+  return `ElevatorIQ_${label}_${date}.pdf`;
+}
+
+module.exports = { generatePDF, generateAndUploadPDF, wrapInHTML, buildReportFilename };

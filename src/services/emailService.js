@@ -1,5 +1,6 @@
 const { Resend } = require('resend');
 const { BRAND } = require('./reportBranding');
+const { buildReportFilename } = require('./pdfService');
 require('dotenv').config();
 
 const resend = new Resend(process.env.EMAIL_PROVIDER_API_KEY);
@@ -7,7 +8,7 @@ const resend = new Resend(process.env.EMAIL_PROVIDER_API_KEY);
 /**
  * sendReport — Email PDF via Resend SDK
  */
-async function sendReport(toEmail, pdfBuffer, reviewType, downloadToken, recipientName = null) {
+async function sendReport(toEmail, pdfBuffer, reviewType, downloadToken, recipientName = null, company = null) {
   const backendUrl = process.env.BACKEND_URL || `https://elevatoriq-backend-prod.onrender.com`;
   const downloadUrl = `${backendUrl}/api/reports/download/${downloadToken}`;
   const reviewLabel = reviewType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -52,7 +53,7 @@ async function sendReport(toEmail, pdfBuffer, reviewType, downloadToken, recipie
     `,
     attachments: [
       {
-        filename: 'ElevatorIQ_Report.pdf',
+        filename: buildReportFilename(reviewType, company),
         content: Buffer.from(pdfBuffer).toString('base64'),
       },
     ],

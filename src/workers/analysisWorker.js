@@ -26,17 +26,18 @@ async function getCustomerEmail(caseId) {
 
 async function getCustomerInfo(caseId) {
   const result = await db.query(
-    `SELECT c.customer_email, cu.email as cust_email, cu.name
+    `SELECT c.customer_email, cu.email as cust_email, cu.name, cu.company
      FROM cases c
      LEFT JOIN customers cu ON c.customer_id = cu.id
      WHERE c.id = $1`,
     [caseId]
   );
-  if (!result.rows.length) return { email: null, name: null };
+  if (!result.rows.length) return { email: null, name: null, company: null };
   const row = result.rows[0];
   return {
     email: row.customer_email || row.cust_email || null,
     name: row.name || null,
+    company: row.company || null,
   };
 }
 
@@ -281,10 +282,10 @@ async function processCase(caseId) {
     );
 
     // 10. Send email (if we have an email address)
-    const { email: customerEmail, name: customerName } = await getCustomerInfo(caseId);
+    const { email: customerEmail, name: customerName, company: customerCompany } = await getCustomerInfo(caseId);
     if (customerEmail) {
       try {
-        await emailService.sendReport(customerEmail, pdfBuffer, caseRow.review_type, token, customerName);
+        await emailService.sendReport(customerEmail, pdfBuffer, caseRow.review_type, token, customerName, customerCompany);
         await db.query(`UPDATE reports SET emailed_at=NOW() WHERE download_token=$1`, [token]);
         console.log(`[Worker] Email sent to ${customerEmail} for case ${caseId}`);
       } catch (emailErr) {
