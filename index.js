@@ -167,7 +167,7 @@ if (process.env.DATABASE_URL) {
 // Cases stuck in 'processing' or 'pending' with no completed report after
 // STALE_THRESHOLD minutes are assumed to have been killed mid-flight.
 async function recoverOrphanedJobs() {
-  const STALE_THRESHOLD_MINUTES = 20;
+  const STALE_THRESHOLD_MINUTES = 5;
   try {
     const result = await db.query(
       `SELECT c.id

@@ -132,4 +132,27 @@ router.get('/stats', requireAdminKey, async (req, res) => {
   }
 });
 
+// POST /api/admin/cases/:id/retry — Reset a stuck/orphaned case and re-queue it
+router.post('/cases/:id/retry', requireAdminKey, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const check = await db.query(`SELECT id, status FROM cases WHERE id=$1`, [id]);
+    if (!check.rows.length) {
+      return res.status(404).json({ error: 'Case not found' });
+    }
+    const current = check.rows[0].status;
+    if (current === 'complete') {
+      return res.status(409).json({ error: 'Case already complete', status: current });
+    }
+    await db.query(`UPDATE cases SET status='pending' WHERE id=$1`, [id]);
+    const { addJob } = require('../workers/analysisWorker');
+    await addJob(id);
+    console.log(`[Admin] Manual retry triggered for case ${id} (was: ${current})`);
+    res.json({ ok: true, case_id: id, previous_status: current, new_status: 'pending' });
+  } catch (err) {
+    console.error(`POST /admin/cases/${id}/retry error:`, err);
+    res.status(500).json({ error: 'Retry failed', detail: err.message });
+  }
+});
+
 module.exports = router;
