@@ -35,6 +35,52 @@ function formatReviewLabel(reviewType) {
     reviewType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
+// ─── Risk flag counter & summary banner ──────────────────────────────────────
+
+/**
+ * Count [HIGH], [MEDIUM], [LOW] occurrences in the report body.
+ * Returns { high, med, low, total }.
+ */
+function countRiskFlags(reportBody) {
+  const text = String(reportBody || '');
+  const high = (text.match(/^\[HIGH\]/gm) || []).length;
+  const med  = (text.match(/^\[MEDIUM\]/gm) || []).length;
+  const low  = (text.match(/^\[LOW\]/gm) || []).length;
+  return { high, med, low, total: high + med + low };
+}
+
+/**
+ * Build the risk summary bar HTML that appears at the top of the report body
+ * before Section 1. Shows a quick at-a-glance flag count with color-coded pills.
+ */
+function buildRiskSummaryBanner(high, med, low) {
+  const total = high + med + low;
+  if (total === 0) return '';
+
+  const overallClass = high > 0 ? 'rsb-overall-high' : med > 1 ? 'rsb-overall-med' : 'rsb-overall-low';
+  const overallText  = high > 0 ? 'Requires Attention' : med > 1 ? 'Items to Negotiate' : 'Minor Items';
+
+  const pill = (count, cls, label) =>
+    count > 0
+      ? `<div class="rsb-pill ${cls}"><span class="rsb-count">${count}</span><span class="rsb-label">${label}</span></div>`
+      : '';
+
+  return `
+<div class="risk-summary-banner ${overallClass}">
+  <div class="rsb-left">
+    <div class="rsb-eyebrow">FLAGS FOUND</div>
+    <div class="rsb-total">${total}</div>
+  </div>
+  <div class="rsb-divider"></div>
+  <div class="rsb-pills">
+    ${pill(high, 'rsb-high', 'HIGH')}
+    ${pill(med,  'rsb-med',  'MEDIUM')}
+    ${pill(low,  'rsb-low',  'LOW')}
+  </div>
+  <div class="rsb-status">${overallText}</div>
+</div>`;
+}
+
 // ─── Text → HTML formatter ────────────────────────────────────────────────────
 
 function escapeHtml(str) {
@@ -398,6 +444,10 @@ async function wrapInHTML(reportBody, reviewType, downloadUrl, score) {
   const bodyHtml  = formatBody(reportBody);
   const coverHtml = await buildCoverPage(label, date, downloadUrl || `https://${BRAND.domain}`, score != null ? score : null);
 
+  // Risk summary banner — count flags from raw report text (before HTML conversion)
+  const { high, med, low } = countRiskFlags(reportBody);
+  const riskBannerHtml = buildRiskSummaryBanner(high, med, low);
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -689,10 +739,82 @@ li strong { color: #111214; }
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
 
+/* ══════════ RISK SUMMARY BANNER ══════════ */
+.risk-summary-banner {
+  display: flex; align-items: center; gap: 0;
+  border-radius: 10px; overflow: hidden;
+  margin-bottom: 28px;
+  border: 1.5px solid #E5E7EB;
+  page-break-inside: avoid;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.rsb-overall-high { border-color: #E85D5D; }
+.rsb-overall-med  { border-color: #E8A840; }
+.rsb-overall-low  { border-color: #6F7478; }
+
+.rsb-left {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 16px 20px; min-width: 72px;
+  background: #0F1112;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.rsb-eyebrow {
+  font-size: 7pt; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: rgba(255,255,255,0.5); margin-bottom: 2px;
+}
+.rsb-total {
+  font-family: 'Montserrat', Helvetica, Arial, sans-serif;
+  font-size: 28pt; font-weight: 800; color: white; line-height: 1;
+}
+.rsb-divider {
+  width: 1.5px; align-self: stretch; background: #E5E7EB;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.rsb-pills {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 20px; flex: 1;
+}
+.rsb-pill {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 10px 16px; border-radius: 8px; min-width: 54px;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.rsb-high { background: #fef2f2; }
+.rsb-med  { background: #fffbeb; }
+.rsb-low  { background: #f9fafb; }
+.rsb-count {
+  font-family: 'Montserrat', Helvetica, Arial, sans-serif;
+  font-size: 18pt; font-weight: 800; line-height: 1;
+}
+.rsb-high .rsb-count { color: #E85D5D; }
+.rsb-med  .rsb-count { color: #E8A840; }
+.rsb-low  .rsb-count { color: #6F7478; }
+.rsb-label {
+  font-size: 7pt; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; margin-top: 3px;
+}
+.rsb-high .rsb-label { color: #E85D5D; }
+.rsb-med  .rsb-label { color: #E8A840; }
+.rsb-low  .rsb-label { color: #6F7478; }
+.rsb-status {
+  padding: 0 20px;
+  font-family: 'Montserrat', Helvetica, Arial, sans-serif;
+  font-size: 10pt; font-weight: 700;
+  color: #111214;
+  white-space: nowrap;
+  border-left: 1.5px solid #E5E7EB;
+  align-self: stretch;
+  display: flex; align-items: center;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.rsb-overall-high .rsb-status { color: #E85D5D; border-color: #E85D5D; }
+.rsb-overall-med  .rsb-status { color: #E8A840; border-color: #E8A840; }
+
 /* ══════════ PRINT ══════════ */
 @media print {
   .section-block { page-break-after: avoid; }
   .risk-block    { page-break-inside: avoid; }
+  .risk-summary-banner { page-break-inside: avoid; }
 }
 
 </style>
@@ -713,6 +835,7 @@ ${coverHtml}
 
 <!-- ══ BODY ══ -->
 <div class="content">
+  ${riskBannerHtml}
   ${bodyHtml}
 </div>
 

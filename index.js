@@ -180,35 +180,63 @@ if (process.env.DATABASE_URL) {
   console.log('[Cron] Aggregation job scheduled for 3:00 AM CT daily');
 }
 
-// ─── Startup recovery: re-queue any cases orphaned by a previous deployment ──
+// ─── Orphan recovery: find and re-queue stuck cases ──────────────────────────
 // Cases stuck in 'processing' or 'pending' with no completed report after
 // STALE_THRESHOLD minutes are assumed to have been killed mid-flight.
-async function recoverOrphanedJobs() {
-  const STALE_THRESHOLD_MINUTES = 5;
+// Called at startup AND on a 10-minute cron to catch cases orphaned between deploys.
+async function recoverOrphanedJobs(source = 'Startup') {
+  const STALE_THRESHOLD_MINUTES = 8; // 8 min: longer than typical Claude + PDF pipeline, shorter than user wait tolerance
   try {
     const result = await db.query(
-      `SELECT c.id
+      `SELECT c.id, c.status, c.created_at
        FROM cases c
        LEFT JOIN reports r ON r.case_id = c.id
        WHERE c.status NOT IN ('complete', 'failed')
          AND c.payment_status != 'pending_payment'
          AND r.id IS NULL
-         AND c.created_at < NOW() - INTERVAL '${STALE_THRESHOLD_MINUTES} minutes'`,
+         AND c.created_at < NOW() - INTERVAL '${STALE_THRESHOLD_MINUTES} minutes'
+       ORDER BY c.created_at ASC`,
     );
     if (result.rows.length === 0) {
-      console.log('[Startup] No orphaned jobs found.');
-      return;
+      console.log(`[${source}] No orphaned jobs found.`);
+      return { recovered: 0 };
     }
-    console.log(`[Startup] Recovering ${result.rows.length} orphaned job(s)...`);
+    console.log(`[${source}] Recovering ${result.rows.length} orphaned job(s)...`);
+    let recovered = 0;
     for (const row of result.rows) {
-      console.log(`[Startup] Re-queuing case: ${row.id}`);
-      // Reset status so the worker can update it properly
-      await db.query(`UPDATE cases SET status='pending' WHERE id=$1`, [row.id]);
-      await addJob(row.id);
+      try {
+        const ageMinutes = Math.round((Date.now() - new Date(row.created_at).getTime()) / 60000);
+        console.log(`[${source}] Re-queuing case: ${row.id} (status: ${row.status}, age: ${ageMinutes}m)`);
+        await db.query(`UPDATE cases SET status='pending' WHERE id=$1`, [row.id]);
+        await addJob(row.id);
+        recovered++;
+      } catch (jobErr) {
+        console.error(`[${source}] Failed to re-queue case ${row.id}:`, jobErr.message);
+      }
     }
+    console.log(`[${source}] Recovery complete: ${recovered}/${result.rows.length} re-queued.`);
+    return { recovered };
   } catch (err) {
-    console.warn('[Startup] Orphan recovery check failed (non-fatal):', err.message);
+    console.warn(`[${source}] Orphan recovery check failed (non-fatal):`, err.message);
+    return { recovered: 0, error: err.message };
   }
+}
+
+// ─── 10-minute health check cron ─────────────────────────────────────────────
+// Render free tier kills in-flight workers on each deploy. Between deploys,
+// a case could sit stuck indefinitely. This cron proactively recovers them
+// without needing a new deploy or manual Supabase intervention.
+if (process.env.DATABASE_URL) {
+  cron.schedule('*/10 * * * *', () => {
+    recoverOrphanedJobs('HealthCheck')
+      .then(({ recovered }) => {
+        if (recovered > 0) {
+          console.log(`[HealthCheck] Recovered ${recovered} stuck case(s).`);
+        }
+      })
+      .catch((err) => console.error('[HealthCheck] Cron failed:', err.message));
+  });
+  console.log('[Cron] Stuck-case health check scheduled every 10 minutes');
 }
 
 // Listen locally for development
@@ -220,6 +248,6 @@ if (require.main === module) {
     console.log(`[ElevatorIQ] Health: http://localhost:${PORT}/health`);
     console.log(`[ElevatorIQ] Readyz: http://localhost:${PORT}/readyz`);
     // Delay slightly so DB connections are warm before scanning
-    setTimeout(recoverOrphanedJobs, 5000);
+    setTimeout(() => recoverOrphanedJobs('Startup'), 5000);
   });
 }
