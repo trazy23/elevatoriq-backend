@@ -16,27 +16,27 @@ const PLANS = {
   pay_per: {
     priceId: () => process.env.STRIPE_PRICE_PAY_PER,
     mode: 'payment',
-    label: 'Single Review — $49',
-    amount: 4900,
+    label: 'Single Review — $99',
+    amount: 9900,
   },
   owner_plan: {
     priceId: () => process.env.STRIPE_PRICE_OWNER_PLAN,
     mode: 'subscription',
-    label: 'Owner Plan — $79/month',
-    amount: 7900,
+    label: 'Owner Plan — $149/month',
+    amount: 14900,
     monthlyReviewCap: 5,
   },
   manager_plan: {
     priceId: () => process.env.STRIPE_PRICE_MANAGER_PLAN,
     mode: 'subscription',
-    label: 'Manager Plan — $299/month',
-    amount: 29900,
+    label: 'Manager Plan — $399/month',
+    amount: 39900,
   },
   manager_plan_annual: {
     priceId: () => process.env.STRIPE_PRICE_MANAGER_ANNUAL,
     mode: 'subscription',
-    label: 'Manager Plan Annual — $2,499/year',
-    amount: 249900,
+    label: 'Manager Plan Annual — $3,199/year',
+    amount: 319900,
   },
 };
 
