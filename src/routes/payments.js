@@ -19,23 +19,24 @@ const PLANS = {
     label: 'Single Review — $49',
     amount: 4900,
   },
-  invoice_monitor: {
-    priceId: () => process.env.STRIPE_PRICE_INVOICE_MONITOR,
+  owner_plan: {
+    priceId: () => process.env.STRIPE_PRICE_OWNER_PLAN,
     mode: 'subscription',
-    label: 'Invoice Monitor — $79/month',
+    label: 'Owner Plan — $79/month',
     amount: 7900,
+    monthlyReviewCap: 5,
   },
-  portfolio_pro: {
-    priceId: () => process.env.STRIPE_PRICE_PORTFOLIO_PRO,
+  manager_plan: {
+    priceId: () => process.env.STRIPE_PRICE_MANAGER_PLAN,
     mode: 'subscription',
-    label: 'Portfolio Pro — $149/month',
-    amount: 14900,
+    label: 'Manager Plan — $299/month',
+    amount: 29900,
   },
-  portfolio_pro_annual: {
-    priceId: () => process.env.STRIPE_PRICE_PORTFOLIO_PRO_ANNUAL,
+  manager_plan_annual: {
+    priceId: () => process.env.STRIPE_PRICE_MANAGER_ANNUAL,
     mode: 'subscription',
-    label: 'Portfolio Pro Annual — $1,199/year',
-    amount: 119900,
+    label: 'Manager Plan Annual — $2,499/year',
+    amount: 249900,
   },
 };
 
@@ -63,7 +64,27 @@ async function getAccessLevel(email, code) {
     [normalizedEmail]
   );
   if (sub.rows.length) {
-    return { access: 'subscribed', tier: sub.rows[0].plan_type };
+    const planType = sub.rows[0].plan_type;
+    const planDef = PLANS[planType];
+
+    // Owner Plan has a monthly review cap — check usage this calendar month
+    if (planDef && planDef.monthlyReviewCap) {
+      const used = await db.query(
+        `SELECT COUNT(*) as count FROM cases
+         WHERE customer_email = $1
+           AND payment_status != 'pending_payment'
+           AND created_at >= date_trunc('month', NOW())`,
+        [normalizedEmail]
+      );
+      const usedCount = parseInt(used.rows[0].count, 10);
+      const remaining = planDef.monthlyReviewCap - usedCount;
+      if (remaining <= 0) {
+        return { access: 'capped', tier: planType, monthlyReviewCap: planDef.monthlyReviewCap, used: usedCount };
+      }
+      return { access: 'subscribed', tier: planType, monthlyReviewCap: planDef.monthlyReviewCap, reviewsUsed: usedCount, reviewsRemaining: remaining };
+    }
+
+    return { access: 'subscribed', tier: planType };
   }
 
   // Check free review (first review free per email)
