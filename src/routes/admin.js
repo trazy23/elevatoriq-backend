@@ -201,8 +201,8 @@ router.get('/metrics', requireAdminKey, async (req, res) => {
       db.query(`
         SELECT
           COUNT(*) FILTER (WHERE status = 'active') AS active_subscriptions,
-          SUM(CASE WHEN plan_type = 'invoice_monitor' THEN 1 ELSE 0 END) FILTER (WHERE status = 'active') AS owner_plan,
-          SUM(CASE WHEN plan_type IN ('portfolio_pro', 'portfolio_pro_annual') THEN 1 ELSE 0 END) FILTER (WHERE status = 'active') AS manager_plan
+          SUM(CASE WHEN plan_type = 'owner_plan' THEN 1 ELSE 0 END) FILTER (WHERE status = 'active') AS owner_plan,
+          SUM(CASE WHEN plan_type IN ('manager_plan', 'manager_plan_annual') THEN 1 ELSE 0 END) FILTER (WHERE status = 'active') AS manager_plan
         FROM subscriptions
       `),
       // Review types breakdown
@@ -241,7 +241,7 @@ router.get('/metrics', requireAdminKey, async (req, res) => {
     // Calculate MRR estimate (assuming standard pricing)
     const ownerPlan = revenueRow.owner_plan || 0;
     const managerPlan = revenueRow.manager_plan || 0;
-    const mrrEstimateCents = (ownerPlan * 14900) + (managerPlan * 29900); // $149 and $299 monthly
+    const mrrEstimateCents = (ownerPlan * 14900) + (managerPlan * 39900); // $149 and $399 monthly
 
     // Build review types object
     const reviewTypesObj = {};

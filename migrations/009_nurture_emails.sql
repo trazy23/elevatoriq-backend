@@ -5,7 +5,7 @@
 
 CREATE TABLE IF NOT EXISTS nurture_emails (
   id                     SERIAL PRIMARY KEY,
-  case_id                TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+  case_id                UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
   customer_email         TEXT NOT NULL,
   customer_name          TEXT,
   email_type             TEXT NOT NULL CHECK (email_type IN ('nurture_1', 'nurture_2', 'nurture_3')),
