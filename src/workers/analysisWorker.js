@@ -322,6 +322,17 @@ async function processCase(caseId) {
       }
     }
 
+    // 10b. Schedule nurture sequence for free-tier users (fire-and-forget)
+    if (caseRow.payment_status === 'free' && customerEmail) {
+      try {
+        const { scheduleNurtureSequence } = require('../services/nurtureService');
+        await scheduleNurtureSequence(caseId, customerEmail, customerName);
+      } catch (nurtureErr) {
+        console.warn(`[Worker] Failed to schedule nurture sequence for ${caseId}: ${nurtureErr.message}`);
+        // Non-blocking — don't prevent case completion
+      }
+    }
+
     // 11. Mark case complete
     await db.query(
       `UPDATE cases SET status='complete', completed_at=NOW() WHERE id=$1`,

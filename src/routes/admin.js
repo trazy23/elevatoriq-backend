@@ -166,4 +166,123 @@ router.post('/cases/:id/retry', requireAdminKey, async (req, res) => {
   }
 });
 
+// POST /api/admin/process-nurture — Process pending nurture emails
+router.post('/process-nurture', requireAdminKey, async (req, res) => {
+  try {
+    const { processNurtureQueue } = require('../services/nurtureService');
+    const result = await processNurtureQueue();
+    res.json({
+      ok: true,
+      processed: result.processed,
+      failed: result.failed,
+      error: result.error || null,
+    });
+  } catch (err) {
+    console.error('POST /admin/process-nurture error:', err);
+    res.status(500).json({ error: 'Failed to process nurture queue', detail: err.message });
+  }
+});
+
+// GET /api/admin/metrics — Dashboard metrics for free/paid tier analytics
+router.get('/metrics', requireAdminKey, async (req, res) => {
+  try {
+    const [summary, revenue, reviewTypes, dailyVolume, nurture] = await Promise.all([
+      // Summary stats
+      db.query(`
+        SELECT
+          COUNT(*) AS total_cases,
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS cases_last_7_days,
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days') AS cases_last_30_days,
+          COUNT(*) FILTER (WHERE payment_status = 'free') AS free_reviews,
+          COUNT(*) FILTER (WHERE payment_status IN ('paid', 'subscribed')) AS paid_reviews
+        FROM cases
+      `),
+      // Revenue stats
+      db.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE status = 'active') AS active_subscriptions,
+          SUM(CASE WHEN plan_type = 'invoice_monitor' THEN 1 ELSE 0 END) FILTER (WHERE status = 'active') AS owner_plan,
+          SUM(CASE WHEN plan_type IN ('portfolio_pro', 'portfolio_pro_annual') THEN 1 ELSE 0 END) FILTER (WHERE status = 'active') AS manager_plan
+        FROM subscriptions
+      `),
+      // Review types breakdown
+      db.query(`
+        SELECT review_type, COUNT(*) AS count
+        FROM cases
+        GROUP BY review_type
+        ORDER BY count DESC
+      `),
+      // Daily volume last 30 days
+      db.query(`
+        SELECT DATE(created_at) AS date, COUNT(*) AS count
+        FROM cases
+        WHERE created_at > NOW() - INTERVAL '30 days'
+        GROUP BY DATE(created_at)
+        ORDER BY date ASC
+      `),
+      // Nurture stats
+      db.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE sent_at IS NOT NULL AND created_at > NOW() - INTERVAL '30 days') AS emails_sent_last_30d,
+          COUNT(*) FILTER (WHERE sent_at IS NULL AND scheduled_for <= NOW()) AS pending_sends
+        FROM nurture_emails
+      `),
+    ]);
+
+    const summaryRow = summary.rows[0];
+    const revenueRow = revenue.rows[0];
+    const nurtureRow = nurture.rows[0];
+
+    // Calculate conversion rate (free to paid)
+    const totalFreeReviews = summaryRow.free_reviews || 0;
+    const totalPaidReviews = summaryRow.paid_reviews || 0;
+    const conversionRate = totalFreeReviews > 0 ? ((totalPaidReviews / (totalFreeReviews + totalPaidReviews)) * 100).toFixed(1) : '0';
+
+    // Calculate MRR estimate (assuming standard pricing)
+    const ownerPlan = revenueRow.owner_plan || 0;
+    const managerPlan = revenueRow.manager_plan || 0;
+    const mrrEstimateCents = (ownerPlan * 14900) + (managerPlan * 29900); // $149 and $299 monthly
+
+    // Build review types object
+    const reviewTypesObj = {};
+    for (const row of reviewTypes.rows) {
+      reviewTypesObj[row.review_type] = row.count;
+    }
+
+    // Build daily volume array
+    const dailyVolumeArray = dailyVolume.rows.map(row => ({
+      date: row.date.toISOString().split('T')[0],
+      count: row.count,
+    }));
+
+    res.json({
+      summary: {
+        total_cases: summaryRow.total_cases || 0,
+        cases_last_7_days: summaryRow.cases_last_7_days || 0,
+        cases_last_30_days: summaryRow.cases_last_30_days || 0,
+        free_reviews: summaryRow.free_reviews || 0,
+        paid_reviews: summaryRow.paid_reviews || 0,
+        free_to_paid_conversion_rate: `${conversionRate}%`,
+      },
+      revenue: {
+        active_subscriptions: revenueRow.active_subscriptions || 0,
+        subscription_breakdown: {
+          owner_plan: ownerPlan,
+          manager_plan: managerPlan,
+        },
+        mrr_estimate_cents: mrrEstimateCents,
+      },
+      review_types: reviewTypesObj,
+      daily_volume_30d: dailyVolumeArray,
+      nurture: {
+        emails_sent_last_30d: nurtureRow.emails_sent_last_30d || 0,
+        pending_sends: nurtureRow.pending_sends || 0,
+      },
+    });
+  } catch (err) {
+    console.error('GET /admin/metrics error:', err);
+    res.status(500).json({ error: 'Failed to load metrics', detail: err.message });
+  }
+});
+
 module.exports = router;

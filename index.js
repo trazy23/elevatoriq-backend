@@ -178,6 +178,18 @@ if (process.env.DATABASE_URL) {
       .catch((err) => console.error('[Cron] Aggregation failed:', err.message));
   }, { timezone: 'America/Chicago' });
   console.log('[Cron] Aggregation job scheduled for 3:00 AM CT daily');
+
+  // Schedule nurture email processing — runs every hour
+  cron.schedule('0 * * * *', () => {
+    console.log('[Cron] Processing nurture email queue...');
+    const { processNurtureQueue } = require('./src/services/nurtureService');
+    processNurtureQueue()
+      .then(({ processed, failed }) => {
+        console.log(`[Cron] Nurture processing complete: ${processed} sent, ${failed} failed`);
+      })
+      .catch((err) => console.error('[Cron] Nurture processing failed:', err.message));
+  });
+  console.log('[Cron] Nurture email processing scheduled every hour');
 }
 
 // ─── Orphan recovery: find and re-queue stuck cases ──────────────────────────
