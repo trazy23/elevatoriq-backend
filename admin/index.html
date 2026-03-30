@@ -1,326 +1,309 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ElevatorIQ Admin</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #0B0E13; color: #E8EAF0; font-family: 'DM Sans', -apple-system, sans-serif; font-size: 14px; }
-  a { color: #00B876; text-decoration: none; }
-  a:hover { text-decoration: underline; }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ElevatorIQ — Admin Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #1c2128;
+      --border: #30363d;
+      --accent: #00B876;
+      --accent-dim: #00874f;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --positive: #3fb950;
+      --negative: #f85149;
+      --radius: 10px;
+      --gap: 16px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; }
+    .shell { max-width: 1280px; margin: 0 auto; padding: 24px var(--gap); }
 
-  /* Layout */
-  .header { background: #12161E; border-bottom: 1px solid #1A1F2A; padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
-  .logo { font-size: 17px; font-weight: 700; letter-spacing: -0.03em; }
-  .logo span { color: #00B876; }
-  .header-right { display: flex; align-items: center; gap: 12px; }
-  .badge { background: rgba(0,184,118,0.1); border: 1px solid rgba(0,184,118,0.2); color: #00B876; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 4px; letter-spacing: 0.04em; }
-  .container { max-width: 1200px; margin: 0 auto; padding: 28px 24px; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+    .logo { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+    .logo span { color: var(--accent); }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .last-updated { font-size: 12px; color: var(--text-muted); }
 
-  /* Login */
-  .login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-  .login-box { background: #12161E; border: 1px solid #1A1F2A; border-radius: 14px; padding: 40px 36px; width: 360px; }
-  .login-title { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 6px; }
-  .login-sub { font-size: 12.5px; color: #7C8290; margin-bottom: 28px; }
-  input[type=password], input[type=text] {
-    width: 100%; background: #1A1F2A; border: 1px solid #222836; border-radius: 8px;
-    padding: 11px 14px; color: #E8EAF0; font-size: 14px; outline: none; margin-bottom: 12px;
-  }
-  input:focus { border-color: #00B876; }
-  .btn { width: 100%; background: #00B876; color: #0B0E13; border: none; border-radius: 8px; padding: 12px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
-  .btn:hover { background: #00CC84; }
-  .btn:disabled { background: #1A1F2A; color: #5E6470; cursor: not-allowed; }
-  .err { font-size: 12px; color: #E85D5D; margin-top: 8px; text-align: center; }
+    .btn {
+      background: var(--accent); color: #0B0E13; border: none; border-radius: 6px;
+      padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px; transition: background 0.15s;
+    }
+    .btn:hover { background: var(--accent-dim); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  /* Stats */
-  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 28px; }
-  .stat-card { background: #12161E; border: 1px solid #1A1F2A; border-radius: 10px; padding: 18px 20px; }
-  .stat-num { font-size: 26px; font-weight: 700; letter-spacing: -0.03em; color: #00B876; line-height: 1.1; }
-  .stat-label { font-size: 11.5px; color: #7C8290; margin-top: 4px; }
+    .key-bar {
+      display: flex; gap: 10px; align-items: center;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 16px; margin-bottom: 20px; flex-wrap: wrap;
+    }
+    .key-bar label { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+    .key-bar input {
+      flex: 1; min-width: 240px; max-width: 420px;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+      color: var(--text); padding: 7px 10px; font-size: 13px; font-family: monospace;
+    }
+    .key-bar input:focus { outline: none; border-color: var(--accent); }
 
-  /* Tabs */
-  .tabs { display: flex; gap: 4px; background: #12161E; border: 1px solid #1A1F2A; border-radius: 9px; padding: 4px; margin-bottom: 20px; width: fit-content; }
-  .tab { background: none; border: none; color: #7C8290; font-size: 13px; font-weight: 500; padding: 8px 18px; border-radius: 7px; cursor: pointer; transition: all 0.15s; }
-  .tab.active { background: #1A1F2A; color: #E8EAF0; }
-  .tab:hover:not(.active) { color: #9AA0AE; }
+    #status-banner { display: none; border-radius: 6px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px; }
+    #status-banner.error { background: #2d0f0f; border: 1px solid var(--negative); color: var(--negative); }
+    #status-banner.info  { background: var(--surface2); border: 1px solid var(--border); color: var(--text-muted); }
 
-  /* Table */
-  .table-wrap { background: #12161E; border: 1px solid #1A1F2A; border-radius: 12px; overflow: hidden; }
-  .table-header { padding: 14px 20px; border-bottom: 1px solid #1A1F2A; display: flex; align-items: center; justify-content: space-between; }
-  .table-title { font-size: 13px; font-weight: 600; color: #9AA0AE; text-transform: uppercase; letter-spacing: 0.06em; }
-  table { width: 100%; border-collapse: collapse; }
-  thead th { background: #0F1318; padding: 11px 16px; text-align: left; font-size: 11px; font-weight: 600; color: #5E6470; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid #1A1F2A; white-space: nowrap; }
-  tbody tr { border-bottom: 1px solid #1A1F2A; transition: background 0.1s; }
-  tbody tr:last-child { border-bottom: none; }
-  tbody tr:hover { background: rgba(255,255,255,0.02); }
-  td { padding: 12px 16px; font-size: 12.5px; color: #D0D4DC; vertical-align: middle; }
-  .email { color: #E8EAF0; font-weight: 500; }
-  .company { color: #9AA0AE; font-size: 12px; }
-  .pill { display: inline-block; font-size: 10.5px; font-weight: 500; padding: 2px 9px; border-radius: 4px; white-space: nowrap; }
-  .pill-green { background: rgba(0,184,118,0.12); color: #00B876; }
-  .pill-red { background: rgba(232,93,93,0.12); color: #E85D5D; }
-  .pill-yellow { background: rgba(232,168,64,0.12); color: #E8A840; }
-  .pill-gray { background: rgba(94,100,112,0.15); color: #9AA0AE; }
-  .pill-blue { background: rgba(80,140,255,0.12); color: #80AAFF; }
-  .mono { font-family: 'DM Mono', monospace; font-size: 11px; color: #5E6470; }
-  .loading { padding: 40px; text-align: center; color: #5E6470; font-size: 13px; }
-  .refresh-btn { background: none; border: 1px solid #1A1F2A; color: #9AA0AE; border-radius: 7px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: all 0.15s; }
-  .refresh-btn:hover { border-color: #00B876; color: #00B876; }
-  .empty { padding: 40px; text-align: center; color: #5E6470; }
-</style>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--gap); margin-bottom: var(--gap); }
+    .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+    .kpi-accent { border-top: 2px solid var(--accent); }
+    .kpi-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); margin-bottom: 10px; }
+    .kpi-value { font-size: 32px; font-weight: 700; line-height: 1; margin-bottom: 6px; }
+    .kpi-sub { font-size: 12px; color: var(--text-muted); }
+
+    .charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: var(--gap); margin-bottom: var(--gap); }
+    @media (max-width: 800px) { .charts-row { grid-template-columns: 1fr; } }
+
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+    .card-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
+    .badge { font-size: 11px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 2px 8px; color: var(--text-muted); }
+    .chart-wrap { position: relative; height: 240px; }
+
+    .bottom-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); margin-bottom: var(--gap); }
+    @media (max-width: 700px) { .bottom-row { grid-template-columns: 1fr; } }
+
+    .type-table { width: 100%; border-collapse: collapse; }
+    .type-table td { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .type-table tr:last-child td { border-bottom: none; }
+    .type-bar-cell { width: 45%; padding: 8px 12px; }
+    .type-bar-track { background: var(--surface2); border-radius: 3px; height: 6px; overflow: hidden; }
+    .type-bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+    .type-count { text-align: right; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+    .nurture-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+    .stat-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center; }
+    .stat-val { font-size: 28px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+    .stat-lbl { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .sub-pair { display: flex; gap: 12px; }
+    .sub-box { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; text-align: center; }
+    .sub-val { font-size: 24px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+    .sub-name { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .sub-price { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+    .footer { text-align: center; font-size: 11px; color: var(--text-muted); padding-top: 12px; }
+    .spin { animation: spin 0.8s linear infinite; display: inline-block; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  </style>
 </head>
 <body>
+<div class="shell">
 
-<div id="app">
-  <!-- Rendered by JS -->
+  <div class="header">
+    <div class="logo">Elevator<span>IQ</span> <span style="font-size:13px;color:var(--text-muted);font-weight:400;margin-left:6px;">Admin</span></div>
+    <div class="header-right">
+      <span class="last-updated" id="last-updated">Not loaded</span>
+      <button class="btn" id="btn-refresh" onclick="loadData()">
+        <span id="refresh-icon">↻</span> Refresh
+      </button>
+    </div>
+  </div>
+
+  <div class="key-bar">
+    <label>Admin Key</label>
+    <input type="password" id="cfg-key" placeholder="Paste your admin key" autocomplete="off">
+    <button class="btn" onclick="loadData()">Load</button>
+  </div>
+
+  <div id="status-banner"></div>
+
+  <div class="kpi-grid">
+    <div class="kpi kpi-accent">
+      <div class="kpi-label">Total Cases</div>
+      <div class="kpi-value" id="kpi-total">—</div>
+      <div class="kpi-sub" id="kpi-total-sub">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Last 7 Days</div>
+      <div class="kpi-value" id="kpi-7d">—</div>
+      <div class="kpi-sub">submissions</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Free Reviews</div>
+      <div class="kpi-value" id="kpi-free">—</div>
+      <div class="kpi-sub">awaiting conversion</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Paid Reviews</div>
+      <div class="kpi-value" id="kpi-paid">—</div>
+      <div class="kpi-sub" id="kpi-conversion">conversion rate</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Active Subs</div>
+      <div class="kpi-value" id="kpi-subs">—</div>
+      <div class="kpi-sub" id="kpi-subs-sub">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">MRR Estimate</div>
+      <div class="kpi-value" id="kpi-mrr">—</div>
+      <div class="kpi-sub">monthly recurring</div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="card">
+      <div class="card-title">Daily Submission Volume <span class="badge">Last 30 days</span></div>
+      <div class="chart-wrap"><canvas id="chart-daily"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Review Type Breakdown</div>
+      <div class="chart-wrap"><canvas id="chart-types"></canvas></div>
+    </div>
+  </div>
+
+  <div class="bottom-row">
+    <div class="card">
+      <div class="card-title">Review Types — Detail</div>
+      <div id="type-table-wrap"><span style="color:var(--text-muted);font-size:13px;">Waiting for data...</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Email Nurture</div>
+      <div class="nurture-grid">
+        <div class="stat-box"><div class="stat-val" id="n-sent">—</div><div class="stat-lbl">Sent (30d)</div></div>
+        <div class="stat-box"><div class="stat-val" id="n-pending">—</div><div class="stat-lbl">Pending</div></div>
+      </div>
+      <div class="card-title" style="margin-top:4px;">Subscriptions</div>
+      <div class="sub-pair">
+        <div class="sub-box">
+          <div class="sub-val" id="sub-owner">—</div>
+          <div class="sub-name">Owner Plan</div>
+          <div class="sub-price">$149/mo</div>
+        </div>
+        <div class="sub-box">
+          <div class="sub-val" id="sub-manager">—</div>
+          <div class="sub-name">Manager Plan</div>
+          <div class="sub-price">$399/mo</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer" id="footer-ts">ElevatorIQ Admin</div>
 </div>
 
 <script>
-const API = 'https://elevatoriq-backend-prod.onrender.com';
-let adminKey = sessionStorage.getItem('eiq_admin_key') || '';
-let currentTab = 'submissions';
-let data = { stats: null, submissions: [], customers: [] };
-let loading = false;
+  let dailyChart = null, typesChart = null;
+  const COLORS = ['#00B876','#4C9BE8','#F7A93B','#E8726B','#9B7FE8','#56C2BE'];
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+  function fmt(n) { return (n === null || n === undefined) ? '—' : Number(n).toLocaleString(); }
+  function fmtMrr(cents) {
+    if (!cents || cents === 0) return '$0';
+    const d = cents / 100;
+    return d >= 1000 ? '$' + (d/1000).toFixed(1) + 'k' : '$' + d.toFixed(0);
+  }
+  function niceName(k) { return k.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase()); }
 
-function fmt(dateStr) {
-  if (!dateStr) return '—';
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
-    ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-}
+  function showStatus(msg, type) {
+    const el = document.getElementById('status-banner');
+    if (!msg) { el.style.display = 'none'; return; }
+    el.textContent = msg; el.className = type || 'info'; el.style.display = 'block';
+  }
 
-function fmtDate(dateStr) {
-  if (!dateStr) return '—';
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
+  async function loadData() {
+    const key = document.getElementById('cfg-key').value.trim();
+    if (!key) { showStatus('Enter your admin key above.', 'error'); return; }
 
-function reviewTypeLabel(rt) {
-  const map = {
-    new_construction_bid: 'New Construction',
-    modernization_bid: 'Modernization',
-    maintenance_bid: 'Maintenance',
-    repair_bid: 'Repair',
-    bid_comparison: 'Bid Comparison',
-    modernization_comparison: 'Mod. Comparison',
-    maintenance_bid_comparison: 'Maint. Comparison',
-    invoice_review: 'Invoice Audit',
-    contract_coverage: 'Contract vs Invoice',
-    auto: 'Auto-detected',
-  };
-  return map[rt] || rt || '—';
-}
+    const btn = document.getElementById('btn-refresh');
+    const icon = document.getElementById('refresh-icon');
+    btn.disabled = true; icon.className = 'spin';
+    showStatus('Loading...', 'info');
 
-function statusPill(status) {
-  if (status === 'complete') return `<span class="pill pill-green">Complete</span>`;
-  if (status === 'failed') return `<span class="pill pill-red">Failed</span>`;
-  if (status === 'processing') return `<span class="pill pill-yellow">Processing</span>`;
-  return `<span class="pill pill-gray">${status || 'Pending'}</span>`;
-}
-
-// ── API calls ────────────────────────────────────────────────────────────
-
-async function fetchAPI(path) {
-  const res = await fetch(`${API}${path}`, {
-    headers: { 'x-admin-key': adminKey }
-  });
-  if (res.status === 401) throw new Error('Invalid admin key');
-  if (!res.ok) throw new Error(`Error ${res.status}`);
-  return res.json();
-}
-
-async function loadAll() {
-  loading = true;
-  render();
-  try {
-    const [stats, subs, custs] = await Promise.all([
-      fetchAPI('/api/admin/stats'),
-      fetchAPI('/api/admin/submissions?limit=200'),
-      fetchAPI('/api/admin/customers'),
-    ]);
-    data.stats = stats;
-    data.submissions = subs.submissions || [];
-    data.customers = custs.customers || [];
-    loading = false;
-    render();
-  } catch (e) {
-    loading = false;
-    if (e.message === 'Invalid admin key') {
-      adminKey = '';
-      sessionStorage.removeItem('eiq_admin_key');
+    try {
+      const res = await fetch('/api/admin/metrics?key=' + encodeURIComponent(key));
+      if (!res.ok) throw new Error('HTTP ' + res.status + ' — check your admin key');
+      const data = await res.json();
+      showStatus('');
+      render(data);
+      const now = new Date();
+      document.getElementById('last-updated').textContent = 'Updated ' + now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+      document.getElementById('footer-ts').textContent = 'Last refreshed: ' + now.toLocaleString();
+    } catch(err) {
+      showStatus('Failed to load: ' + err.message, 'error');
     }
-    render(e.message);
-  }
-}
-
-// ── Render ────────────────────────────────────────────────────────────────
-
-function render(errMsg) {
-  const app = document.getElementById('app');
-
-  if (!adminKey) {
-    app.innerHTML = `
-      <div class="login-wrap">
-        <div class="login-box">
-          <div class="login-title">Elevator<span style="color:#00B876">IQ</span> Admin</div>
-          <div class="login-sub">Enter your admin API key to continue.</div>
-          <input type="password" id="keyInput" placeholder="Admin API key" autocomplete="off" />
-          <button class="btn" id="loginBtn">Sign In</button>
-          ${errMsg ? `<div class="err">${errMsg}</div>` : ''}
-        </div>
-      </div>`;
-    document.getElementById('loginBtn').onclick = doLogin;
-    document.getElementById('keyInput').onkeydown = (e) => { if (e.key === 'Enter') doLogin(); };
-    setTimeout(() => document.getElementById('keyInput')?.focus(), 50);
-    return;
+    btn.disabled = false; icon.className = '';
   }
 
-  const stats = data.stats?.totals || {};
+  function render(d) {
+    const s = d.summary || {}, r = d.revenue || {}, n = d.nurture || {};
+    const types = d.review_types || {}, daily = d.daily_volume_30d || [];
+    const bd = r.subscription_breakdown || {};
 
-  app.innerHTML = `
-    <div class="header">
-      <div class="logo">Elevator<span>IQ</span> <span style="color:#5E6470;font-weight:400;font-size:13px">/ Admin</span></div>
-      <div class="header-right">
-        <span class="badge">INTERNAL</span>
-        <button class="refresh-btn" id="refreshBtn">↻ Refresh</button>
-        <button class="refresh-btn" id="logoutBtn">Sign Out</button>
-      </div>
-    </div>
-    <div class="container">
-      ${loading ? '<div class="loading">Loading...</div>' : renderDashboard(stats)}
-    </div>`;
+    document.getElementById('kpi-total').textContent     = fmt(s.total_cases);
+    document.getElementById('kpi-total-sub').textContent = fmt(s.cases_last_30_days) + ' in last 30 days';
+    document.getElementById('kpi-7d').textContent        = fmt(s.cases_last_7_days);
+    document.getElementById('kpi-free').textContent      = fmt(s.free_reviews);
+    document.getElementById('kpi-paid').textContent      = fmt(s.paid_reviews);
+    document.getElementById('kpi-conversion').textContent= (s.free_to_paid_conversion_rate || '0%') + ' conversion';
+    document.getElementById('kpi-subs').textContent      = fmt(r.active_subscriptions);
+    document.getElementById('kpi-subs-sub').textContent  = (bd.owner_plan||0) + ' Owner · ' + (bd.manager_plan||0) + ' Manager';
+    document.getElementById('kpi-mrr').textContent       = fmtMrr(r.mrr_estimate_cents);
+    document.getElementById('n-sent').textContent        = fmt(n.emails_sent_last_30d);
+    document.getElementById('n-pending').textContent     = fmt(n.pending_sends);
+    document.getElementById('sub-owner').textContent     = bd.owner_plan || 0;
+    document.getElementById('sub-manager').textContent   = bd.manager_plan || 0;
 
-  document.getElementById('refreshBtn')?.addEventListener('click', loadAll);
-  document.getElementById('logoutBtn')?.addEventListener('click', () => {
-    adminKey = '';
-    sessionStorage.removeItem('eiq_admin_key');
-    render();
-  });
-  document.querySelectorAll('.tab').forEach(btn => {
-    btn.addEventListener('click', () => { currentTab = btn.dataset.tab; render(); });
-  });
-}
+    // Daily bar chart
+    const labels = daily.map(row => {
+      const dt = new Date(row.date + 'T00:00:00');
+      return dt.toLocaleDateString([], {month:'short', day:'numeric'});
+    });
+    const counts = daily.map(row => parseInt(row.count));
+    const barCfg = {
+      type: 'bar',
+      data: { labels, datasets: [{ label:'Submissions', data:counts, backgroundColor:'#00B87644', borderColor:'#00B876', borderWidth:1.5, borderRadius:4 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend:{display:false}, tooltip:{backgroundColor:'#1c2128',borderColor:'#30363d',borderWidth:1,titleColor:'#e6edf3',bodyColor:'#8b949e',callbacks:{label:c=>' '+c.parsed.y+' submissions'}} },
+        scales: {
+          x: { grid:{display:false}, ticks:{color:'#8b949e',font:{size:11},maxRotation:45} },
+          y: { beginAtZero:true, grid:{color:'#21262d'}, ticks:{color:'#8b949e',font:{size:11},stepSize:1} }
+        }
+      }
+    };
+    if (dailyChart) { dailyChart.data.labels=labels; dailyChart.data.datasets[0].data=counts; dailyChart.update('none'); }
+    else { dailyChart = new Chart(document.getElementById('chart-daily').getContext('2d'), barCfg); }
 
-function renderDashboard(stats) {
-  return `
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-num">${stats.total_submissions || 0}</div><div class="stat-label">Total Submissions</div></div>
-      <div class="stat-card"><div class="stat-num">${stats.unique_emails || 0}</div><div class="stat-label">Unique Customers</div></div>
-      <div class="stat-card"><div class="stat-num">${stats.last_7_days || 0}</div><div class="stat-label">Last 7 Days</div></div>
-      <div class="stat-card"><div class="stat-num">${stats.last_30_days || 0}</div><div class="stat-label">Last 30 Days</div></div>
-      <div class="stat-card"><div class="stat-num">${stats.completed || 0}</div><div class="stat-label">Completed</div></div>
-      <div class="stat-card"><div class="stat-num">${stats.failed || 0}</div><div class="stat-label">Failed</div></div>
-    </div>
-    <div class="tabs">
-      <button class="tab ${currentTab === 'submissions' ? 'active' : ''}" data-tab="submissions">Submissions (${data.submissions.length})</button>
-      <button class="tab ${currentTab === 'customers' ? 'active' : ''}" data-tab="customers">Customers (${data.customers.length})</button>
-      <button class="tab ${currentTab === 'review_types' ? 'active' : ''}" data-tab="review_types">Review Types</button>
-    </div>
-    ${currentTab === 'submissions' ? renderSubmissions() : ''}
-    ${currentTab === 'customers' ? renderCustomers() : ''}
-    ${currentTab === 'review_types' ? renderReviewTypes() : ''}
-  `;
-}
+    // Types doughnut
+    const typeKeys = Object.keys(types);
+    const typeVals = typeKeys.map(k => parseInt(types[k]));
+    const typeLabels = typeKeys.map(niceName);
+    const total = typeVals.reduce((a,b)=>a+b,0);
+    const dnutCfg = {
+      type: 'doughnut',
+      data: { labels:typeLabels, datasets:[{ data:typeVals, backgroundColor:COLORS.map(c=>c+'BB'), borderColor:'#161b22', borderWidth:2 }] },
+      options: {
+        responsive:true, maintainAspectRatio:false, cutout:'62%',
+        plugins: {
+          legend:{position:'bottom',labels:{color:'#8b949e',font:{size:11},padding:10,usePointStyle:true}},
+          tooltip:{backgroundColor:'#1c2128',borderColor:'#30363d',borderWidth:1,titleColor:'#e6edf3',bodyColor:'#8b949e',
+            callbacks:{label:c=>' '+c.parsed+' ('+((c.parsed/total)*100).toFixed(1)+'%)'}}
+        }
+      }
+    };
+    if (typesChart) { typesChart.data.labels=typeLabels; typesChart.data.datasets[0].data=typeVals; typesChart.update('none'); }
+    else { typesChart = new Chart(document.getElementById('chart-types').getContext('2d'), dnutCfg); }
 
-function renderSubmissions() {
-  if (!data.submissions.length) return '<div class="empty">No submissions yet.</div>';
-  const rows = data.submissions.map(s => `
-    <tr>
-      <td>${fmt(s.created_at)}</td>
-      <td><div class="email">${s.customer_email || '—'}</div>${s.company ? `<div class="company">${s.company}</div>` : ''}</td>
-      <td><span class="pill pill-blue">${reviewTypeLabel(s.review_type)}</span></td>
-      <td>${statusPill(s.status)}</td>
-      <td class="mono">${s.total_reviews || 1}</td>
-      <td>${s.download_token ? `<a href="https://elevatoriq-backend-prod.onrender.com/api/reports/download/${s.download_token}" target="_blank">Download</a>` : '—'}</td>
-    </tr>`).join('');
-  return `
-    <div class="table-wrap">
-      <div class="table-header">
-        <span class="table-title">All Submissions</span>
-        <span class="mono">${data.submissions.length} total</span>
-      </div>
-      <table>
-        <thead><tr>
-          <th>Date</th><th>Email / Company</th><th>Review Type</th><th>Status</th><th>Reviews</th><th>Report</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
-}
-
-function renderCustomers() {
-  if (!data.customers.length) return '<div class="empty">No customers yet.</div>';
-  const rows = data.customers.map(c => `
-    <tr>
-      <td>${fmtDate(c.created_at)}</td>
-      <td><div class="email">${c.email}</div>${c.company ? `<div class="company">${c.company}</div>` : ''}</td>
-      <td class="mono">${c.total_reviews || 0}</td>
-      <td class="mono">${c.completed_reviews || 0}</td>
-      <td>${fmtDate(c.last_review_at)}</td>
-      <td>${(c.review_types_used || []).filter(Boolean).map(rt => `<span class="pill pill-gray" style="margin-right:3px">${reviewTypeLabel(rt)}</span>`).join('')}</td>
-    </tr>`).join('');
-  return `
-    <div class="table-wrap">
-      <div class="table-header">
-        <span class="table-title">All Customers</span>
-        <span class="mono">${data.customers.length} unique</span>
-      </div>
-      <table>
-        <thead><tr>
-          <th>First Seen</th><th>Email / Company</th><th>Total Reviews</th><th>Completed</th><th>Last Review</th><th>Types Used</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
-}
-
-function renderReviewTypes() {
-  const types = data.stats?.review_types || [];
-  if (!types.length) return '<div class="empty">No data yet.</div>';
-  const total = types.reduce((sum, t) => sum + parseInt(t.count), 0);
-  const rows = types.map(t => {
-    const pct = total > 0 ? Math.round((t.count / total) * 100) : 0;
-    return `
-      <tr>
-        <td><span class="pill pill-blue">${reviewTypeLabel(t.review_type)}</span></td>
-        <td class="mono">${t.count}</td>
-        <td>
-          <div style="display:flex;align-items:center;gap:10px">
-            <div style="height:6px;border-radius:3px;background:#1A1F2A;width:200px;overflow:hidden">
-              <div style="height:100%;border-radius:3px;background:#00B876;width:${pct}%"></div>
-            </div>
-            <span class="mono">${pct}%</span>
-          </div>
-        </td>
-      </tr>`;
-  }).join('');
-  return `
-    <div class="table-wrap">
-      <div class="table-header"><span class="table-title">Review Type Breakdown</span></div>
-      <table>
-        <thead><tr><th>Type</th><th>Count</th><th>Share</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
-}
-
-function doLogin() {
-  const val = document.getElementById('keyInput')?.value?.trim();
-  if (!val) return;
-  adminKey = val;
-  sessionStorage.setItem('eiq_admin_key', val);
-  loadAll();
-}
-
-// ── Boot ─────────────────────────────────────────────────────────────────
-
-render();
-if (adminKey) loadAll();
+    // Type table
+    const maxCount = Math.max(...typeVals) || 1;
+    const sorted = typeKeys.map((k,i)=>({name:niceName(k),count:typeVals[i],color:COLORS[i%COLORS.length]})).sort((a,b)=>b.count-a.count);
+    document.getElementById('type-table-wrap').innerHTML = '<table class="type-table">' +
+      sorted.map(row => `<tr>
+        <td style="color:var(--text)">${row.name}</td>
+        <td class="type-bar-cell"><div class="type-bar-track"><div class="type-bar-fill" style="width:${((row.count/maxCount)*100).toFixed(0)}%;background:${row.color}"></div></div></td>
+        <td class="type-count">${row.count}</td>
+      </tr>`).join('') + '</table>';
+  }
 </script>
 </body>
 </html>
