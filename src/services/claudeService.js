@@ -584,6 +584,17 @@ You are about to compare maintenance contract proposals. Key comparison dimensio
 - ESCALATION TERMS: Which vendors offer a fixed price cap vs. uncapped escalation? Over a 3- or 5-year contract, a 5% annual escalation compounds significantly.
 - COVERAGE GAPS: What does each vendor's "full-service" actually cover? Major components, proprietary diagnostics, callback volume limits — these vary.
 - CANCELLATION TERMS: Compare notice windows and early termination penalties. A 30-day cancellation window vs. a 90-day window on otherwise identical contracts has very different lock-in risk.`,
+
+    contract_coverage: `PRE-READ BRIEF — CONTRACT COVERAGE & INVOICE ANALYSIS
+You are about to analyze a maintenance contract or invoice to assess coverage and billing accuracy. Before reading, prime yourself on the most common high-value findings:
+- SCOPE CREEP BILLING: Charges for work that falls within a full-service maintenance agreement (adjustments, lubrication, safety device testing, callbacks) billed as extra. This is the #1 invoice dispute in the industry.
+- LABOR RATE ABUSE: Licensed elevator mechanic rates in Ohio/Michigan are $85–135/hr straight time, $130–200/hr overtime (2025). Rates significantly above this range need justification.
+- MINIMUM HOUR PADDING: A 15-minute callback billed as a 4-hour minimum. Standard is a 2-hour minimum for callbacks; anything above that on a routine service call is a flag.
+- PARTS MARKUP: The contract may specify a markup cap (typically 10–20%). Parts billed at cost-plus-40% or higher without a contract basis are disputable.
+- EVERGREEN TRAP: Short cancellation windows (30 days or less) that auto-renew the contract for full terms. The standard is 90 days written notice; 30 days is a trap.
+- MAJOR COMPONENT EXCLUSIONS: Motor, controller, valve body, and jack/cylinder are the high-cost components. A contract called "full-service" that excludes these is misrepresented.
+- PROPRIETARY LOCK-IN: Language requiring the owner to use only this vendor for any additional repairs, modernization, or work. This is a material restriction.
+- RETROACTIVE BILLING: Work performed 3–6 months ago billed today with no explanation is a red flag — the owner cannot verify whether the work occurred.`,
   };
 
   const ctx = contexts[reviewType];
@@ -697,7 +708,9 @@ Hard requirements:
 - Do not paste long verbatim text from source docs.
 - Quote only short snippets when needed, then explain implications.
 - Make clear recommendations tied to risk/price/scope tradeoffs.
-- CRITICAL: Only reference specific state elevator codes (e.g. Michigan Act 227, ASME A17.1 as adopted by a state) if the submitted documents explicitly indicate the project state or jurisdiction. If state cannot be determined from the documents, do not cite state-specific code — reference only general ASME A17.1 or OSHA standards that apply nationally. Never assume a state based on addresses or phone numbers alone.
+- EVIDENCE GROUNDING (CRITICAL — anti-hallucination): Every finding must cite its source. For each flag or risk signal, you must reference where in the document you found it — e.g., "Section 4 states: '[short quote]'" or "The payment terms clause on page 2 specifies...". Do NOT state a finding if you cannot trace it to specific document text. If a clause or provision is absent, say it is absent — do not invent or assume its terms.
+- ABSENCE VS. PRESENCE: Never treat the absence of a clause as evidence of misconduct. If a term is not mentioned, state: "[Item] is not addressed in the submitted documents" — then explain why its absence matters. Do not fabricate what a missing clause might say.
+- JURISDICTION GUARDRAIL: Only reference specific state elevator codes (e.g. Michigan Act 227, ASME A17.1 as adopted by a state) if the submitted documents explicitly indicate the project state or jurisdiction. If state cannot be determined from the documents, reference only general ASME A17.1 or OSHA standards that apply nationally. Never assume a state based on addresses or phone numbers alone.
 - FORMATTING: Do NOT use markdown syntax in your report. Do not use # or ## headers, do not use > blockquotes, do not use --- horizontal rules. Section headers must follow the exact format "SECTION N — TITLE" only. Plain text paragraphs and bullet points (- item) only.
 
 After your structured report, output the data extraction section:
@@ -713,11 +726,11 @@ Field guidance:
 - scope_type: one of "modernization", "repair", "maintenance", "new_installation", "inspection", "other"
 - state: two-letter state code (e.g. "MI"), null if not determinable
 - equipment_type: one of "hydraulic", "traction", "escalator", "mrl", "other"
-- score_label: Assign one of exactly three values based on the findings in your report:
-  - "High Performance": Pricing fair/competitive, scope complete or only minor gaps, ≤1 HIGH risk flag, clean contract terms.
-  - "Moderate Inefficiencies": Some cost exposure or scope gaps, 2–3 HIGH flags, items the owner should negotiate before signing.
-  - "High Risk": Multiple HIGH severity flags, significant cost exposure, major scope gaps, or seriously unfair terms.
-  Must not be null. Choose the label that best matches the overall findings — do not default to the middle.
+- score_label: Assign one of exactly three values. Use the flag counts from your report as the primary signal:
+  - "High Performance" (score 85): 0–1 HIGH flags total, pricing within or below market range, scope substantially complete with at most minor gaps, no predatory contract terms. The document is a solid starting point with only minor refinement needed.
+  - "Moderate Inefficiencies" (score 60): 2–3 HIGH flags OR pricing 10–25% above market OR meaningful scope gaps OR 1–2 clause red flags (e.g., uncapped escalation, short cancellation window). Owner should negotiate before signing but deal is not fatally flawed.
+  - "High Risk" (score 25): 4+ HIGH flags OR pricing >25% above market OR critical scope gaps (missing major components, open-ended change order exposure) OR multiple predatory clause patterns (evergreen trap + parts markup + proprietary lock-in together). Owner should not sign as written.
+  Must not be null. Count your actual HIGH-severity flags and apply the thresholds above — do not default to the middle tier without cause.
 - elevatoriq_score: Set to 85 if score_label is "High Performance", 60 if "Moderate Inefficiencies", 25 if "High Risk".
 
 Replace the JSON placeholder with actual extracted data from the documents. Valid JSON only. No markdown. No code fences.`;
@@ -735,17 +748,18 @@ Replace the JSON placeholder with actual extracted data from the documents. Vali
     };
   } catch (err) {
     console.warn('[Claude] Analysis failed:', err.message);
-    // Return a working report body so the PDF can still be generated
+    // Return a clearly labeled error report rather than fake success content.
+    // The PDF will still generate, but the user will see the failure honestly.
     return {
-      reportBody: `ElevatorIQ Analysis Report\n\nDocument Analysis Complete\n\nThis report contains the structured analysis of your submitted document.\n\nKey Findings:\n- Document processed successfully\n- Analysis completed by ElevatorIQ AI system\n- Review type: ${reviewType}\n\nFor detailed findings, contact support.`,
+      reportBody: `ANALYSIS INCOMPLETE — PROCESSING ERROR\n\nElevatorIQ was unable to complete the analysis for this document.\n\nReason: ${err.message || 'Internal processing error'}\n\nThis is not a completed report. No findings, flags, or recommendations have been generated.\n\nPlease contact support@elevatoriq.ai with your case reference to request a re-analysis. If this was a paid report, you are entitled to a full credit or reprocess at no charge.`,
       extractionJson: null,
-      meta: { usedChunking, chunkCount },
+      meta: { usedChunking, chunkCount, analysisError: true },
     };
   }
 }
 
 function getModule(reviewType) {
-  if (reviewType === 'invoice_review' || reviewType === 'contract_coverage') return 'A';
+  if (reviewType === 'invoice_review' || reviewType === 'contract_coverage') return 'A'; // billing/contract review
   if (
     reviewType === 'bid_comparison' ||
     reviewType === 'modernization_comparison' ||
