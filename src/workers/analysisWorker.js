@@ -7,6 +7,7 @@ const emailService = require('../services/emailService');
 const storageService = require('../services/storageService');
 const { extractAllDocuments } = require('../services/extractionService');
 const { validate } = require('../validation/extractionSchema');
+const { inferReviewTypeFromDocuments } = require('../services/documentTypeService');
 const { randomUUID } = require('crypto');
 const uuidv4 = () => randomUUID();
 const { getStructuredReportKey } = require('../utils/reportArtifacts');
@@ -176,7 +177,8 @@ function isReportDeliverable(reportBody = '', sourceText = '') {
   const text = String(reportBody || '');
   const hasSections = /SECTION\s+1/i.test(text) && /SECTION\s+2/i.test(text);
   const hasDecisionSignals = /(Recommendation|Risk|Assessment|Bottom Line)/i.test(text);
-  const looksLikeFallback = /DOCUMENT PREVIEW|Automated fallback report/i.test(text);
+  // Catch legacy fallback text AND the new honest error message format
+  const looksLikeFallback = /DOCUMENT PREVIEW|Automated fallback report|ANALYSIS INCOMPLETE|PROCESSING ERROR/i.test(text);
   const overlapScore = computeVerbatimOverlapScore(sourceText, text);
   const isLikelySourceCopy = overlapScore > 0.35;
 
@@ -224,6 +226,23 @@ async function processCase(caseId) {
     // 2. Load documents
     const docs = await db.query('SELECT * FROM documents WHERE case_id=$1', [caseId]);
     if (!docs.rows.length) throw new Error('No documents found for case');
+
+    // 2b. Safety-net: resolve 'auto' review type here in the worker if it wasn't
+    //     resolved upstream (e.g. race condition, old flow, direct job enqueue).
+    //     Without this, Claude gets the generic default template and the quality
+    //     gate rejects the output, marking the case failed.
+    if (!caseRow.review_type || caseRow.review_type === 'auto') {
+      const resolvedType = inferReviewTypeFromDocuments(docs.rows);
+      const moduleMap = { invoice_review: 'A', contract_coverage: 'A' };
+      const resolvedModule = moduleMap[resolvedType] || 'B';
+      await db.query(
+        `UPDATE cases SET review_type=$2, module=$3 WHERE id=$1`,
+        [caseId, resolvedType, resolvedModule]
+      );
+      caseRow.review_type = resolvedType;
+      caseRow.module = resolvedModule;
+      console.log(`[Worker] Resolved 'auto' review_type to '${resolvedType}' for case ${caseId}`);
+    }
 
     // 3. Extract text from each document (PDF, DOCX, DOC)
     console.log(`[Worker] Extracting text from ${docs.rows.length} document(s)`);
