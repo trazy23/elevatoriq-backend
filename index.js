@@ -60,6 +60,7 @@ const invoiceRouter = require('./src/routes/invoice');
 const adminRouter = require('./src/routes/admin');
 const { router: paymentsRouter, handleStripeWebhook } = require('./src/routes/payments');
 const scopeGeneratorRouter = require('./src/routes/scope-generator');
+const subscribeRouter = require('./src/routes/subscribe');
 
 // Stripe webhook — MUST use raw body, registered before express.json()
 app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
@@ -72,6 +73,7 @@ app.use('/api/invoice', invoiceRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/v1/scope-generator', scopeGeneratorRouter);
+app.use('/api/subscribe', subscribeRouter);
 
 // Health checks
 app.get('/health', (req, res) => {
