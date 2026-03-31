@@ -278,6 +278,17 @@ async function processCase(caseId) {
     let extractionId = null;
     if (analysisResult.extractionJson) {
       extractionId = await saveExtraction(caseId, analysisResult);
+      // Populate fact tables from the parsed extraction JSON so the portfolio
+      // intelligence layer has structured data to query across cases.
+      if (extractionId) {
+        try {
+          const extJson = JSON.parse(analysisResult.extractionJson);
+          await saveFactTables(extractionId, extJson);
+        } catch (factErr) {
+          console.warn(`[Worker] saveFactTables failed for ${caseId}:`, factErr.message);
+          // Non-blocking — fact table failure must not fail the job
+        }
+      }
     }
 
     // 6b. Parse ElevatorIQ assessment from extraction JSON and persist to cases table
