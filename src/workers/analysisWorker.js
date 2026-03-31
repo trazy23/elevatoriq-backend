@@ -289,6 +289,28 @@ async function processCase(caseId) {
       }
     }
 
+    // 6c. Fallback: if score still null (extraction JSON absent or malformed),
+    //     derive it from HIGH/MEDIUM/LOW flag counts in the report body.
+    //     This ensures the cover page score gauge always renders.
+    if (elevatoriqScore === null && analysisResult.reportBody) {
+      try {
+        const body = analysisResult.reportBody;
+        const highCount = (body.match(/^\[HIGH\]/gm) || []).length;
+        const medCount  = (body.match(/^\[MEDIUM\]/gm) || []).length;
+        if (highCount >= 4) {
+          elevatoriqScore = 25; // High Risk
+        } else if (highCount >= 2 || medCount >= 3) {
+          elevatoriqScore = 60; // Moderate Inefficiencies
+        } else {
+          elevatoriqScore = 85; // High Performance
+        }
+        await db.query(`UPDATE cases SET elevatoriq_score=$2 WHERE id=$1`, [caseId, elevatoriqScore]);
+        console.log(`[Worker] Score derived from flags for case ${caseId}: ${elevatoriqScore} (HIGH:${highCount} MED:${medCount})`);
+      } catch (err) {
+        console.warn(`[Worker] Flag-based score fallback failed for ${caseId}:`, err.message);
+      }
+    }
+
     // 7. Persist structured report JSON artifact (non-blocking)
     let structuredReportPath = null;
     try {
