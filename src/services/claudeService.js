@@ -38,6 +38,13 @@ CRITICAL — DOCUMENT ATTRIBUTION RULES:
 - If a figure appears in only one document, do not assume the other vendor's figure — state it as "not stated" or "not provided".
 - Do not average, blend, or interpolate values across bids.
 
+CRITICAL — SCOPE ACCURACY RULES:
+- For every scope item disposition (retain / replace / refurbish / exclude / new), cite only what the document explicitly states in its scope table or scope narrative.
+- Do NOT infer, assume, or apply general industry knowledge about what vendors "typically" include or exclude.
+- If a document is silent on a scope item, state "Not addressed" — never infer inclusion or exclusion from silence.
+- A "New" seal, packing, or minor component on a retained assembly does NOT constitute replacement of that assembly. Distinguish between "new jack" and "new jack packing/seal on retained jack."
+- If you cannot point to specific document language supporting a scope claim, do not make the claim. Fabricating scope details is a critical error.
+
 ═══════════════════════════════════════════════
 SECTION 1 — EXECUTIVE SUMMARY
 ═══════════════════════════════════════════════
