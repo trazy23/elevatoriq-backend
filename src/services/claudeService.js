@@ -724,10 +724,31 @@ ${reportSnippet}`;
 }
 
 async function summarizeChunk(chunk, idx, total, timeoutMs) {
-  const prompt = `You are preparing synthesis notes for a final elevator proposal review.\nSummarize the following document section. Keep concise but specific.\n\nRequired output headings:\n- Commercial terms\n- Scope includes\n- Scope excludes/owner responsibilities\n- Risk signals\n- Timeline/lead time\n- Verbatim snippets (max 5 short quotes)\n\nDocument section:\n${chunk}`;
+  const prompt = `You are preparing synthesis notes for a final elevator proposal review.
+Summarize the following document section. Keep concise but specific.
+
+CRITICAL — SCOPE DISPOSITION ACCURACY:
+- For every scope item found in tables or lists, record its exact disposition using one of: RETAIN EXISTING | NEW | REPLACE | EXCLUDE | OWNER RESPONSIBILITY
+- A "New" packing, seal, gasket, or minor component on a retained assembly is NOT replacement of that assembly. Treat them separately.
+  - Correct: "Jack: RETAIN EXISTING | Jack Packing/Seal: NEW"
+  - Wrong: "New jack"
+- Copy the exact disposition word from the source table. If the table says "Retain" — write RETAIN EXISTING. If it says "New" — write NEW.
+- Never merge, combine, or infer dispositions across related line items.
+- If a scope table is present, list every row with its item name and disposition. Do not omit rows.
+
+Required output headings:
+- Commercial terms
+- Scope items (list each item as: "[Item Name]: [DISPOSITION]" — one per line, verbatim from source table if present)
+- Scope excludes / owner responsibilities
+- Risk signals
+- Timeline / lead time
+- Verbatim snippets (max 5 short quotes — prioritize scope table rows and pricing lines)
+
+Document section:
+${chunk}`;
 
   const resp = await callClaude({
-    systemPrompt: 'Create factual extraction notes only. No recommendations. No copied long passages.',
+    systemPrompt: 'Create factual extraction notes only. Preserve exact scope dispositions — do not paraphrase or merge scope table rows. No recommendations.',
     userPrompt: prompt,
     timeoutMs,
     maxTokens: 1800,
