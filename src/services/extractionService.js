@@ -268,11 +268,31 @@ async function extractLegacyDOC(buffer, fileName = '') {
  * Given an array of document rows from the DB, download and extract all text.
  * Returns a single combined string ready to pass to Claude.
  */
-async function extractAllDocuments(docRows) {
+const COMPARISON_TYPES = new Set([
+  'bid_comparison',
+  'modernization_comparison',
+  'maintenance_bid_comparison',
+]);
+
+const VENDOR_LABELS = ['A', 'B', 'C', 'D'];
+
+async function extractAllDocuments(docRows, reviewType = '') {
+  const isComparison = COMPARISON_TYPES.has(reviewType);
+
   const results = await Promise.allSettled(
-    docRows.map(async (doc) => {
-      const ext = path.extname(doc.file_name).toLowerCase();
+    docRows.map(async (doc, i) => {
       const text = await extractTextFromStorage(doc.storage_path);
+      if (isComparison) {
+        const vendorLabel = VENDOR_LABELS[i] || `${i + 1}`;
+        const header = [
+          '╔' + '═'.repeat(66) + '╗',
+          `║  BID ${i + 1} — VENDOR ${vendorLabel}${ ' '.repeat(Math.max(0, 55 - `BID ${i + 1} — VENDOR ${vendorLabel}`.length))}║`,
+          `║  File: ${doc.file_name.slice(0, 57).padEnd(58)}║`,
+          '╚' + '═'.repeat(66) + '╝',
+        ].join('\n');
+        const footer = `\n${'═'.repeat(20)} END OF BID ${i + 1} (VENDOR ${vendorLabel}) ${'═'.repeat(20)}`;
+        return `${header}\n\n${text}${footer}`;
+      }
       const label = doc.file_type ? `[${doc.file_type.toUpperCase()}]` : '[DOCUMENT]';
       return `${label} ${doc.file_name}\n${'─'.repeat(60)}\n${text}`;
     })

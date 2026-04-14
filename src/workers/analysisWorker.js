@@ -246,7 +246,7 @@ async function processCase(caseId) {
 
     // 3. Extract text from each document (PDF, DOCX, DOC)
     console.log(`[Worker] Extracting text from ${docs.rows.length} document(s)`);
-    const combinedText = await extractAllDocuments(docs.rows);
+    const combinedText = await extractAllDocuments(docs.rows, caseRow.review_type);
 
     // 4. Get benchmark context + knowledge base context
     const [benchmarks, knowledge] = await Promise.all([

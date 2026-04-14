@@ -31,6 +31,13 @@ function getReportTemplate(reviewType) {
     return `
 You are producing an ElevatorIQ Structured Bid Comparison Report. Be specific, detailed, and use actual numbers from the documents. Do not generalize.
 
+CRITICAL — DOCUMENT ATTRIBUTION RULES:
+- Each bid is labeled BID 1 — VENDOR A, BID 2 — VENDOR B, etc. in the source documents.
+- Every price, scope item, term, or figure you cite MUST be explicitly attributed to its source bid (e.g., "Vendor A: $142,000 | Vendor B: $118,500").
+- NEVER assign the same value to multiple vendors unless both documents explicitly state identical figures.
+- If a figure appears in only one document, do not assume the other vendor's figure — state it as "not stated" or "not provided".
+- Do not average, blend, or interpolate values across bids.
+
 ═══════════════════════════════════════════════
 SECTION 1 — EXECUTIVE SUMMARY
 ═══════════════════════════════════════════════
