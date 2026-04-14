@@ -634,7 +634,7 @@ async function callClaude({ systemPrompt, userPrompt, maxTokens = 8000, timeoutM
 }
 
 async function summarizeChunk(chunk, idx, total, timeoutMs) {
-  const prompt = `You are preparing synthesis notes for a final elevator proposal review.\nSummarize this chunk only. Keep concise but specific.\n\nRequired output headings:\n- Commercial terms\n- Scope includes\n- Scope excludes/owner responsibilities\n- Risk signals\n- Timeline/lead time\n- Verbatim snippets (max 5 short quotes)\n\nChunk ${idx + 1} of ${total}:\n${chunk}`;
+  const prompt = `You are preparing synthesis notes for a final elevator proposal review.\nSummarize the following document section. Keep concise but specific.\n\nRequired output headings:\n- Commercial terms\n- Scope includes\n- Scope excludes/owner responsibilities\n- Risk signals\n- Timeline/lead time\n- Verbatim snippets (max 5 short quotes)\n\nDocument section:\n${chunk}`;
 
   const resp = await callClaude({
     systemPrompt: 'Create factual extraction notes only. No recommendations. No copied long passages.',
@@ -658,11 +658,11 @@ async function buildAnalysisInput(documentText, timeoutMs) {
   for (let i = 0; i < chunks.length; i += 1) {
     // Sequential on purpose to avoid Anthropic burst throttling and keep latency bounded.
     const summary = await summarizeChunk(chunks[i], i, chunks.length, Math.min(timeoutMs, 90000));
-    summaries.push(`## Chunk ${i + 1}\n${summary}`);
+    summaries.push(summary);
   }
 
   return {
-    preparedText: `[LONG DOCUMENT SYNTHESIS]\nOriginal length: ${text.length} chars\nChunks: ${chunks.length}\n\n${summaries.join('\n\n')}`,
+    preparedText: `[DOCUMENT CONTENT]\n${summaries.join('\n\n---\n\n')}`,
     usedChunking: true,
     chunkCount: chunks.length,
   };
