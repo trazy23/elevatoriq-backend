@@ -647,6 +647,82 @@ async function callClaude({ systemPrompt, userPrompt, maxTokens = 8000, timeoutM
   ]);
 }
 
+// ─── Verification pass ───────────────────────────────────────────────────────
+// Runs after the main report is generated. Uses Haiku (fast + cheap) to
+// cross-check every factual claim in the report against the source text.
+// Results are logged to Render and returned in meta — they don't block delivery.
+
+async function verifyReport(reportBody, preparedText, timeoutMs) {
+  // Cap source text sent to verifier — summaries are already bounded,
+  // but raw docs can be large. 15k chars covers most proposals fully.
+  const sourceSnippet = preparedText.substring(0, 15000);
+  const reportSnippet = reportBody.substring(0, 8000);
+
+  const verifyPrompt = `You are a fact-checker auditing an elevator industry analysis report for unsupported claims.
+
+You will receive:
+1. SOURCE TEXT — the document(s) that were analyzed (may be summaries of longer originals)
+2. ANALYSIS REPORT — the report generated from those documents
+
+Your job: identify factual claims in the ANALYSIS REPORT that are NOT directly supported by explicit language in the SOURCE TEXT.
+
+ONLY flag claims about:
+- Scope item dispositions: what is retained, replaced, new, or excluded (e.g., "Vendor B replaces the jack")
+- Specific dollar amounts, percentages, or numeric terms attributed to a vendor
+- Payment milestones or deposit structures
+- Warranty durations or conditions
+- Specific clause language attributed to a document
+
+DO NOT flag:
+- Interpretive analysis, risk assessments, or recommendations — these are opinions
+- Industry context statements (e.g., "hydraulic jacks typically last 25-40 years")
+- Claims where the source is simply silent — absence is not a fabrication
+- Minor paraphrasing of language that is clearly present in the source
+
+Output only valid JSON. No markdown, no explanation outside the JSON.
+
+If no unsupported claims found:
+{"verified":true,"flags":[]}
+
+If unsupported claims found:
+{"verified":false,"flags":[{"claim":"exact quote or paraphrase of the claim from the report","location":"e.g. Section 4 — Scope Comparison, Jack paragraph","issue":"why it lacks source support"}]}
+
+SOURCE TEXT:
+${sourceSnippet}
+
+ANALYSIS REPORT:
+${reportSnippet}`;
+
+  try {
+    const resp = await callClaude({
+      systemPrompt: 'You are a precise fact-checker. Output only valid JSON. No markdown, no preamble.',
+      userPrompt: verifyPrompt,
+      maxTokens: 1200,
+      timeoutMs: Math.min(timeoutMs, 60000),
+      model: 'claude-haiku-4-5-20251001',
+    });
+
+    const raw = resp.content?.[0]?.text?.trim() || '';
+    const result = JSON.parse(raw);
+
+    if (!result.verified && result.flags?.length > 0) {
+      console.warn(`[ElevatorIQ Verify] ⚠️  ${result.flags.length} unsupported claim(s) detected in report:`);
+      result.flags.forEach((f, i) => {
+        console.warn(`  [${i + 1}] Claim: "${f.claim}"`);
+        console.warn(`       Location: ${f.location}`);
+        console.warn(`       Issue: ${f.issue}`);
+      });
+    } else {
+      console.log('[ElevatorIQ Verify] ✅ All checked claims supported by source documents.');
+    }
+
+    return result;
+  } catch (err) {
+    console.warn('[ElevatorIQ Verify] Verification pass failed (non-blocking):', err.message);
+    return null;
+  }
+}
+
 async function summarizeChunk(chunk, idx, total, timeoutMs) {
   const prompt = `You are preparing synthesis notes for a final elevator proposal review.\nSummarize the following document section. Keep concise but specific.\n\nRequired output headings:\n- Commercial terms\n- Scope includes\n- Scope excludes/owner responsibilities\n- Risk signals\n- Timeline/lead time\n- Verbatim snippets (max 5 short quotes)\n\nDocument section:\n${chunk}`;
 
@@ -753,11 +829,22 @@ Replace the JSON placeholder with actual extracted data from the documents. Vali
     const response = await callClaude({ systemPrompt, userPrompt, timeoutMs, maxTokens: 8000 });
     const raw = response.content?.[0]?.text || '';
     const parsed = parseAnalysisResponse(raw);
+
+    // ── Verification pass ──────────────────────────────────────────────────
+    // Runs asynchronously after the main report. Non-blocking: a verify
+    // failure never prevents report delivery. Results surface in Render logs
+    // and are attached to meta for future admin dashboard visibility.
+    let verification = null;
+    if (parsed.reportBody) {
+      verification = await verifyReport(parsed.reportBody, preparedText, timeoutMs);
+    }
+
     return {
       ...parsed,
       meta: {
         usedChunking,
         chunkCount,
+        verification,
       },
     };
   } catch (err) {
