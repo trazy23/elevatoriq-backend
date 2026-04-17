@@ -136,6 +136,20 @@ Give a clear, direct recommendation:
 - What the owner should NOT accept as written in any bid
 - Pre-award deliverables to require from the winning vendor (updated schedule, insurance certificates, references with similar equipment in this market, written confirmation of fixed price)
 - If you cannot recommend one vendor over another, explain exactly what information would change your analysis
+
+═══════════════════════════════════════════════
+SECTION 9 — OWNER SUMMARY & ACTION PLAN
+═══════════════════════════════════════════════
+This section is written directly for the building owner or decision-maker — not a technical audience. Use plain language. No jargon.
+
+Start with a 3–5 sentence plain-English summary of the situation: what they received, what the key differences are between the proposals, and what your overall read is. Write as if you're explaining this to someone who has never read an elevator contract.
+
+Then list the owner's next steps as a numbered action plan. Each step should:
+- Be written as a clear action the owner can take (e.g., "Ask Vendor B to confirm in writing that the price is firm and not subject to tariff increases")
+- Explain in one sentence why it matters
+- Be achievable within the next 1–2 weeks where possible
+
+Include steps for: following up with vendors on open questions, what to request before signing, what to watch out for, and what the final decision should be based on. Aim for 5–8 numbered steps total. Write the tone as a trusted advisor speaking directly to the owner — confident, clear, and free of elevator industry terminology.
 `;
   }
 
