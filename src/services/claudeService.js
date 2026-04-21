@@ -138,18 +138,21 @@ Give a clear, direct recommendation:
 - If you cannot recommend one vendor over another, explain exactly what information would change your analysis
 
 ═══════════════════════════════════════════════
-SECTION 9 — OWNER SUMMARY & ACTION PLAN
+SECTION 9 — CONCLUSION & OWNER ACTION PLAN
 ═══════════════════════════════════════════════
-This section is written directly for the building owner or decision-maker — not a technical audience. Use plain language. No jargon.
+This is the final section of the report and serves as the conclusion. Write it directly to the building owner — plain English, no jargon, confident tone like a trusted advisor who just finished reviewing their proposals.
 
-Start with a 3–5 sentence plain-English summary of the situation: what they received, what the key differences are between the proposals, and what your overall read is. Write as if you're explaining this to someone who has never read an elevator contract.
+Open with a CONCLUSION paragraph (4–6 sentences) that:
+- States clearly which vendor, if any, has the stronger proposal right now and why — use their actual names, the actual dollar figures from this report, and the actual reasons from the analysis (not generic statements)
+- Acknowledges the key open items that must be resolved before signing
+- Gives the owner a clear sense of where things stand and what the path forward is
 
-Then list the owner's next steps as a numbered action plan. Each step should:
-- Be written as a clear action the owner can take (e.g., "Ask Vendor B to confirm in writing that the price is firm and not subject to tariff increases")
-- Explain in one sentence why it matters
-- Be achievable within the next 1–2 weeks where possible
+Then write a numbered ACTION PLAN of 5–8 specific steps. Each step must:
+- Reference the actual vendor name, dollar amount, clause, or issue from THIS report (never write a generic step like "review all terms")
+- Tell the owner exactly what to ask for or do — be specific enough that they could do it without reading the rest of the report
+- Include a one-sentence explanation of what's at stake if they don't
 
-Include steps for: following up with vendors on open questions, what to request before signing, what to watch out for, and what the final decision should be based on. Aim for 5–8 numbered steps total. Write the tone as a trusted advisor speaking directly to the owner — confident, clear, and free of elevator industry terminology.
+Ground every step in the findings already documented in this report. Do not introduce new issues. Do not use elevator industry terminology. Write as if you are the owner's trusted advisor giving them their marching orders after finishing the review.
 `;
   }
 
@@ -861,7 +864,7 @@ Field guidance:
 Replace the JSON placeholder with actual extracted data from the documents. Valid JSON only. No markdown. No code fences.`;
 
   try {
-    const response = await callClaude({ systemPrompt, userPrompt, timeoutMs, maxTokens: 8000 });
+    const response = await callClaude({ systemPrompt, userPrompt, timeoutMs, maxTokens: 16000 });
     const raw = response.content?.[0]?.text || '';
     const parsed = parseAnalysisResponse(raw);
 
