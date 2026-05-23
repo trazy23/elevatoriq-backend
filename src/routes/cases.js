@@ -210,7 +210,7 @@ router.get('/:id/output', async (req, res) => {
     const { id } = req.params;
 
     const caseResult = await db.query(
-      'SELECT id, review_type, status, customer_email, created_at, completed_at, elevatoriq_score FROM cases WHERE id=$1',
+      'SELECT id, review_type, status, customer_email, created_at, completed_at, elevatoriq_score, payment_status FROM cases WHERE id=$1',
       [id]
     );
     if (!caseResult.rows.length) return res.status(404).json({ error: 'Case not found' });
@@ -243,13 +243,59 @@ router.get('/:id/output', async (req, res) => {
 
     const latestReport = reportResult.rows[0] || null;
     const latestExtraction = extractionResult.rows[0] || null;
+    const caseRow = caseResult.rows[0];
+    const isFree = caseRow.payment_status === 'free';
 
+    // ── Free-tier gating ────────────────────────────────────────────────────
+    // Free users get a diagnostic view (verdict + findings) but not the
+    // actionable content (dollar quantification, recommendations, PDF/QR).
+    // The full analysis still runs underneath — gating is display-only.
+    if (isFree && caseRow.status === 'completed') {
+      const raw = latestExtraction?.raw_json || {};
+      const flags = Array.isArray(raw.flags) ? raw.flags : [];
+
+      // Redact each flag: keep what/where/why (title, finding, risk) — remove how/how-much (recommendation)
+      const diagnosticFlags = flags.map(f => ({
+        title: f.title || f.item || null,
+        severity: f.severity || null,
+        finding: f.finding || f.description || null,
+        risk: f.risk || null,
+        // recommendation intentionally omitted
+      }));
+
+      const highCount = flags.filter(f => (f.severity || '').toUpperCase() === 'HIGH').length;
+      const medCount  = flags.filter(f => (f.severity || '').toUpperCase() === 'MEDIUM').length;
+      const lowCount  = flags.filter(f => (f.severity || '').toUpperCase() === 'LOW').length;
+
+      return res.json({
+        tier: 'free',
+        case: {
+          id: caseRow.id,
+          review_type: caseRow.review_type,
+          status: caseRow.status,
+          created_at: caseRow.created_at,
+          completed_at: caseRow.completed_at,
+          elevatoriq_score: caseRow.elevatoriq_score,
+        },
+        diagnostic: {
+          score_label: raw.score_label || null,
+          elevatoriq_score: caseRow.elevatoriq_score ?? raw.elevatoriq_score ?? null,
+          flag_summary: { high: highCount, medium: medCount, low: lowCount, total: flags.length },
+          flags: diagnosticFlags,
+          // Gated fields — shown as locked to prompt upgrade
+          gated: ['dollar_quantification', 'negotiation_recommendations', 'scope_line_items', 'pdf_report'],
+        },
+        documents: documentsResult.rows,
+      });
+    }
+
+    // ── Paid / subscription / pending response (unchanged) ──────────────────
     res.json({
-      case: caseResult.rows[0],
+      case: caseRow,
       artifacts: {
         report_pdf_path: latestReport?.storage_path || null,
         report_download_path: latestReport?.download_token ? `/api/reports/download/${latestReport.download_token}` : null,
-        report_email_recipient: caseResult.rows[0].customer_email || null,
+        report_email_recipient: caseRow.customer_email || null,
         structured_report_path: getStructuredReportKey(id),
       },
       documents: documentsResult.rows,

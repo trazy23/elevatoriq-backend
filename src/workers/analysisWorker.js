@@ -349,33 +349,41 @@ async function processCase(caseId) {
       console.warn(`[Worker] Structured report artifact upload failed for ${caseId}:`, err.message);
     }
 
-    // 8. Generate download token first (so QR code can embed the link)
-    const token = uuidv4();
-
-    // 9. Generate PDF with QR code pointing to the download URL
-    const { key: pdfKey, buffer: pdfBuffer } = await pdfService.generateAndUploadPDF(
-      analysisResult.reportBody, caseId, caseRow.review_type, token, elevatoriqScore
-    );
-    await db.query(
-      `INSERT INTO reports (case_id, storage_path, download_token) VALUES ($1,$2,$3)`,
-      [caseId, pdfKey, token]
-    );
-
-    // 10. Send email (if we have an email address)
+    // ── Free-tier path: skip PDF and report email ──────────────────────────
+    // Free users get a diagnostic view in the browser. PDF/QR/email are paid
+    // deliverables. Full analysis still runs — gating is output-only.
+    const isFreeCase = caseRow.payment_status === 'free';
     const { email: customerEmail, name: customerName, company: customerCompany } = await getCustomerInfo(caseId);
-    if (customerEmail) {
-      try {
-        await emailService.sendReport(customerEmail, pdfBuffer, caseRow.review_type, token, customerName, customerCompany);
-        await db.query(`UPDATE reports SET emailed_at=NOW() WHERE download_token=$1`, [token]);
-        console.log(`[Worker] Email sent to ${customerEmail} for case ${caseId}`);
-      } catch (emailErr) {
-        console.warn(`[Worker] Email send failed for case ${caseId}: ${emailErr.message}`);
-        // Don't block report completion if email fails
+
+    if (!isFreeCase) {
+      // 8. Generate download token first (so QR code can embed the link)
+      const token = uuidv4();
+
+      // 9. Generate PDF with QR code pointing to the download URL
+      const { key: pdfKey, buffer: pdfBuffer } = await pdfService.generateAndUploadPDF(
+        analysisResult.reportBody, caseId, caseRow.review_type, token, elevatoriqScore
+      );
+      await db.query(
+        `INSERT INTO reports (case_id, storage_path, download_token) VALUES ($1,$2,$3)`,
+        [caseId, pdfKey, token]
+      );
+
+      // 10. Send report email (paid users only)
+      if (customerEmail) {
+        try {
+          await emailService.sendReport(customerEmail, pdfBuffer, caseRow.review_type, token, customerName, customerCompany);
+          await db.query(`UPDATE reports SET emailed_at=NOW() WHERE download_token=$1`, [token]);
+          console.log(`[Worker] Email sent to ${customerEmail} for case ${caseId}`);
+        } catch (emailErr) {
+          console.warn(`[Worker] Email send failed for case ${caseId}: ${emailErr.message}`);
+        }
       }
+    } else {
+      console.log(`[Worker] Free case ${caseId} — skipping PDF generation and report email`);
     }
 
     // 10b. Schedule nurture sequence for free-tier users (fire-and-forget)
-    if (caseRow.payment_status === 'free' && customerEmail) {
+    if (isFreeCase && customerEmail) {
       try {
         const { scheduleNurtureSequence } = require('../services/nurtureService');
         await scheduleNurtureSequence(caseId, customerEmail, customerName);
