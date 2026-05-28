@@ -847,7 +847,7 @@ After your structured report, output the data extraction section:
 [Your complete structured report following the template above]
 
 ---EXTRACTION_JSON---
-{"schema_version":"1.2","module":"${getModule(reviewType)}","state":null,"market":null,"equipment_type":null,"contract_type":null,"scope_type":null,"unit_count":null,"contract_value":null,"confidence_overall":"medium","benchmark_version":"1.0","elevatoriq_score":null,"score_label":null,"flags":[],"labor_data":[],"line_items":[],"parts_data":[],"contract_terms":{}}
+{"schema_version":"1.2","module":"${getModule(reviewType)}","state":null,"market":null,"equipment_type":null,"contract_type":null,"scope_type":null,"unit_count":null,"contract_value":null,"confidence_overall":"medium","benchmark_version":"1.0","elevatoriq_score":null,"score_label":null,"executive_summary":null,"flags":[],"labor_data":[],"line_items":[],"parts_data":[],"contract_terms":{}}
 
 Field guidance:
 - contract_value: total contract price as a number (e.g. 30619), null if not stated
@@ -860,6 +860,7 @@ Field guidance:
   - "High Risk" (score 25): 4+ HIGH flags OR pricing >25% above market OR critical scope gaps (missing major components, open-ended change order exposure) OR multiple predatory clause patterns (evergreen trap + parts markup + proprietary lock-in together). Owner should not sign as written.
   Must not be null. Count your actual HIGH-severity flags and apply the thresholds above — do not default to the middle tier without cause.
 - elevatoriq_score: Set to 85 if score_label is "High Performance", 60 if "Moderate Inefficiencies", 25 if "High Risk".
+- executive_summary: Write 3–4 sentences in plain English directly to the building owner — no elevator jargon, no recommendations, no dollar amounts. Open with a clear verdict that names the risk level (e.g., "This contract has serious problems that need to be resolved before you sign." or "This bid is priced competitively but contains terms that require negotiation."). In the next 1–2 sentences, name the most significant issue categories found (e.g., "We found an automatic renewal trap with no exit window, and a price escalation clause with no cap." or "The scope comparison reveals three major items where the bids differ substantially, and one vendor's payment terms are aggressive."). Close with one sentence that creates urgency around seeing the full details. This is the hook that makes a property manager want the full report — write it accordingly. Must not be null.
 
 Replace the JSON placeholder with actual extracted data from the documents. Valid JSON only. No markdown. No code fences.`;
 

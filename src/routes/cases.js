@@ -247,20 +247,20 @@ router.get('/:id/output', async (req, res) => {
     const isFree = caseRow.payment_status === 'free';
 
     // ── Free-tier gating ────────────────────────────────────────────────────
-    // Free users get a diagnostic view (verdict + findings) but not the
-    // actionable content (dollar quantification, recommendations, PDF/QR).
-    // The full analysis still runs underneath — gating is display-only.
+    // Free users see: executive summary (plain-English verdict) + flag titles
+    // with severity badges. Flag bodies are blurred in the UI — finding, risk,
+    // and recommendation are paid content. The full analysis still runs
+    // underneath — gating is display-only (newspaper paywall model).
     if (isFree && caseRow.status === 'completed') {
       const raw = latestExtraction?.raw_json || {};
       const flags = Array.isArray(raw.flags) ? raw.flags : [];
 
-      // Redact each flag: keep what/where/why (title, finding, risk) — remove how/how-much (recommendation)
+      // Soft gate: expose title + severity only. Finding/risk/recommendation
+      // are omitted here and blurred on the frontend to drive upgrade.
       const diagnosticFlags = flags.map(f => ({
         title: f.title || f.item || null,
         severity: f.severity || null,
-        finding: f.finding || f.description || null,
-        risk: f.risk || null,
-        // recommendation intentionally omitted
+        // finding, risk, recommendation intentionally omitted
       }));
 
       const highCount = flags.filter(f => (f.severity || '').toUpperCase() === 'HIGH').length;
@@ -277,13 +277,14 @@ router.get('/:id/output', async (req, res) => {
           completed_at: caseRow.completed_at,
           elevatoriq_score: caseRow.elevatoriq_score,
         },
+        executive_summary: raw.executive_summary || null,
         diagnostic: {
           score_label: raw.score_label || null,
           elevatoriq_score: caseRow.elevatoriq_score ?? raw.elevatoriq_score ?? null,
           flag_summary: { high: highCount, medium: medCount, low: lowCount, total: flags.length },
           flags: diagnosticFlags,
-          // Gated fields — shown as locked to prompt upgrade
-          gated: ['dollar_quantification', 'negotiation_recommendations', 'scope_line_items', 'pdf_report'],
+          // Gated fields — blurred in UI to drive upgrade
+          gated: ['finding', 'risk', 'dollar_quantification', 'negotiation_recommendations', 'scope_line_items', 'pdf_report'],
         },
         documents: documentsResult.rows,
       });
