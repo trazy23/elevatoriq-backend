@@ -245,7 +245,7 @@ async function handleStripeWebhook(req, res) {
             `INSERT INTO payments (case_id, customer_email, stripe_session_id, amount_cents, status)
              VALUES ($1, $2, $3, $4, 'completed')
              ON CONFLICT (stripe_session_id) DO NOTHING`,
-            [caseId, email, session.id, 4900]
+            [caseId, email, session.id, planDef.amount]
           );
 
         } else if (plan && plan !== 'pay_per') {
@@ -323,7 +323,10 @@ async function handleStripeWebhook(req, res) {
     }
   } catch (err) {
     console.error('[Webhook] Handler error:', err.message, err.stack);
-    // Return 200 to prevent Stripe from retrying — log for manual investigation
+    // Return a non-2xx response so Stripe retries payment events that failed
+    // because of transient DB/queue issues. Swallowing these would leave paid
+    // customers without unlocked reports.
+    return res.status(500).json({ error: 'Webhook handler failed' });
   }
 
   res.json({ received: true });

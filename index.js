@@ -36,6 +36,22 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key'],
 }));
 
+// Routes
+const casesRouter = require('./src/routes/cases');
+const documentsRouter = require('./src/routes/documents');
+const reportsRouter = require('./src/routes/reports');
+const promptRouter = require('./src/routes/prompt');
+const invoiceRouter = require('./src/routes/invoice');
+const adminRouter = require('./src/routes/admin');
+const { router: paymentsRouter, handleStripeWebhook } = require('./src/routes/payments');
+const scopeGeneratorRouter = require('./src/routes/scope-generator');
+const subscribeRouter = require('./src/routes/subscribe');
+
+// Stripe webhook — MUST use raw body and MUST be registered before express.json().
+// If express.json() runs first, Stripe signature verification receives a parsed object
+// instead of the original Buffer and real webhooks fail.
+app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -50,20 +66,6 @@ console.log(`[init] Static dist present: ${hasDist}`);
 if (hasDist) {
   app.use(express.static(distPath));
 }
-
-// Routes
-const casesRouter = require('./src/routes/cases');
-const documentsRouter = require('./src/routes/documents');
-const reportsRouter = require('./src/routes/reports');
-const promptRouter = require('./src/routes/prompt');
-const invoiceRouter = require('./src/routes/invoice');
-const adminRouter = require('./src/routes/admin');
-const { router: paymentsRouter, handleStripeWebhook } = require('./src/routes/payments');
-const scopeGeneratorRouter = require('./src/routes/scope-generator');
-const subscribeRouter = require('./src/routes/subscribe');
-
-// Stripe webhook — MUST use raw body, registered before express.json()
-app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
 
 app.use('/api/cases', casesRouter);
 app.use('/api/cases/:id/documents', documentsRouter);
