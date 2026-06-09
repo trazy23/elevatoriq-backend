@@ -54,37 +54,46 @@ async function getAccessLevel(email, code) {
     return { access: 'free', tier: 'access_code', unlimited: true };
   }
 
-  // Check active subscription
-  const sub = await db.query(
-    `SELECT plan_type FROM subscriptions
-     WHERE customer_email = $1
-       AND status = 'active'
-       AND (current_period_end IS NULL OR current_period_end > NOW())
-     ORDER BY created_at DESC LIMIT 1`,
-    [normalizedEmail]
-  );
-  if (sub.rows.length) {
-    const planType = sub.rows[0].plan_type;
-    const planDef = PLANS[planType];
+  // Check active subscription. Subscription tables/constraints may lag during pay-per
+  // launch, so do not let subscription-read failures block the free/$99 path.
+  try {
+    const sub = await db.query(
+      `SELECT plan_type FROM subscriptions
+       WHERE customer_email = $1
+         AND status = 'active'
+         AND (current_period_end IS NULL OR current_period_end > NOW())
+       ORDER BY created_at DESC LIMIT 1`,
+      [normalizedEmail]
+    );
+    if (sub.rows.length) {
+      const planType = sub.rows[0].plan_type;
+      const planDef = PLANS[planType];
 
-    // Owner Plan has a monthly review cap — check usage this calendar month
-    if (planDef && planDef.monthlyReviewCap) {
-      const used = await db.query(
-        `SELECT COUNT(*) as count FROM cases
-         WHERE customer_email = $1
-           AND payment_status != 'pending_payment'
-           AND created_at >= date_trunc('month', NOW())`,
-        [normalizedEmail]
-      );
-      const usedCount = parseInt(used.rows[0].count, 10);
-      const remaining = planDef.monthlyReviewCap - usedCount;
-      if (remaining <= 0) {
-        return { access: 'capped', tier: planType, monthlyReviewCap: planDef.monthlyReviewCap, used: usedCount };
+      // Owner Plan has a monthly review cap — check usage this calendar month
+      if (planDef && planDef.monthlyReviewCap) {
+        const used = await db.query(
+          `SELECT COUNT(*) as count FROM cases
+           WHERE customer_email = $1
+             AND payment_status != 'pending_payment'
+             AND created_at >= date_trunc('month', NOW())`,
+          [normalizedEmail]
+        );
+        const usedCount = parseInt(used.rows[0].count, 10);
+        const remaining = planDef.monthlyReviewCap - usedCount;
+        if (remaining <= 0) {
+          return { access: 'capped', tier: planType, monthlyReviewCap: planDef.monthlyReviewCap, used: usedCount };
+        }
+        return { access: 'subscribed', tier: planType, monthlyReviewCap: planDef.monthlyReviewCap, reviewsUsed: usedCount, reviewsRemaining: remaining };
       }
-      return { access: 'subscribed', tier: planType, monthlyReviewCap: planDef.monthlyReviewCap, reviewsUsed: usedCount, reviewsRemaining: remaining };
-    }
 
-    return { access: 'subscribed', tier: planType };
+      return { access: 'subscribed', tier: planType };
+    }
+  } catch (err) {
+    if (err.code === '42P01' || /relation .*subscriptions.* does not exist/i.test(err.message || '')) {
+      console.warn('[Payments] subscriptions table unavailable; continuing with free/pay-per access check');
+    } else {
+      throw err;
+    }
   }
 
   // Check free review (first review free per email)
