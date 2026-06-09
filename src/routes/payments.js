@@ -228,8 +228,14 @@ async function handleStripeWebhook(req, res) {
       case 'checkout.session.completed': {
         const session = event.data.object;
         const plan = session.metadata?.plan;
+        const planDef = PLANS[plan];
         const email = (session.metadata?.customer_email || session.customer_email || '').toLowerCase();
         const caseId = session.metadata?.case_id;
+
+        if (plan && !planDef) {
+          console.warn(`[Webhook] Unknown checkout plan in metadata: ${plan}`);
+          break;
+        }
 
         if (plan === 'pay_per' && caseId) {
           // Mark case as paid, then trigger analysis
