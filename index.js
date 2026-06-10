@@ -259,11 +259,23 @@ if (process.env.DATABASE_URL) {
 if (require.main === module) {
   // Render will set PORT automatically
   const PORT = process.env.PORT || 3001;
-  app.listen(PORT, () => {
-    console.log(`[ElevatorIQ] Backend running on port ${PORT}`);
-    console.log(`[ElevatorIQ] Health: http://localhost:${PORT}/health`);
-    console.log(`[ElevatorIQ] Readyz: http://localhost:${PORT}/readyz`);
-    // Delay slightly so DB connections are warm before scanning
-    setTimeout(() => recoverOrphanedJobs('Startup'), 5000);
-  });
+  const { runMigrations } = require('./src/migrate');
+
+  // Apply any outstanding migrations before accepting traffic.
+  // If migrations fail hard, refuse to start — a server running
+  // against a broken schema is worse than one that won't start.
+  runMigrations()
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`[ElevatorIQ] Backend running on port ${PORT}`);
+        console.log(`[ElevatorIQ] Health: http://localhost:${PORT}/health`);
+        console.log(`[ElevatorIQ] Readyz: http://localhost:${PORT}/readyz`);
+        // Delay slightly so DB connections are warm before scanning
+        setTimeout(() => recoverOrphanedJobs('Startup'), 5000);
+      });
+    })
+    .catch((err) => {
+      console.error('[Startup] Migration failed — refusing to start:', err.message);
+      process.exit(1);
+    });
 }
