@@ -6,7 +6,7 @@ const { addJob } = require('../workers/analysisWorker');
 const { getStructuredReportKey } = require('../utils/reportArtifacts');
 const { inferReviewTypeFromDocuments } = require('../services/documentTypeService');
 const { sendSubmissionAlert } = require('../services/emailService');
-const { checkFreeEligibility } = require('../services/freeEligibilityService');
+const { isDisposableDomain } = require('../services/freeEligibilityService');
 const { isValidAccessCode } = require('../services/accessCodeService');
 
 // Extract real client IP — respects X-Forwarded-For from Render/proxies
@@ -105,15 +105,14 @@ router.post('/', submissionLimiter, async (req, res) => {
     const paymentStatus = req.body.payment_status === 'pending_payment' ? 'pending_payment' : 'free';
     const clientIp = getClientIp(req);
 
-    // Free tier abuse check — email normalization + IP + disposable domain
-    // Bypass entirely for valid access codes (pilot users, internal testing, gifted access)
+    // Block disposable/throwaway email domains — we need a real email for the nurture sequence.
+    // No per-email or per-IP usage limits: every submission gets a free diagnostic (newspaper model).
     if (paymentStatus === 'free' && !isValidAccessCode(access_code)) {
-      const eligibility = await checkFreeEligibility(resolvedRecipientEmail, clientIp);
-      if (!eligibility.eligible) {
+      if (isDisposableDomain(resolvedRecipientEmail)) {
         return res.status(403).json({
           error: 'Free review not available',
-          code: eligibility.reason,
-          message: eligibility.message,
+          code: 'disposable_email',
+          message: 'Disposable email addresses are not eligible for a free review. Please use a work or personal email.',
         });
       }
     }
