@@ -4,19 +4,25 @@
 
 -- ─── Enumerations ─────────────────────────────────────────────────────────────
 
-CREATE TYPE IF NOT EXISTS work_type AS ENUM (
-  'maintenance',
-  'repair',
-  'modernization',
-  'new_installation'
-);
+DO $$ BEGIN
+  CREATE TYPE work_type AS ENUM (
+    'maintenance',
+    'repair',
+    'modernization',
+    'new_installation'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE TYPE IF NOT EXISTS output_path AS ENUM (
-  'bid_framework',
-  'rfi_document',
-  'modernization_readiness_guide',
-  'coming_soon_capture'
-);
+DO $$ BEGIN
+  CREATE TYPE output_path AS ENUM (
+    'bid_framework',
+    'rfi_document',
+    'modernization_readiness_guide',
+    'coming_soon_capture'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ─── Scope Generator Sessions ─────────────────────────────────────────────────
 
