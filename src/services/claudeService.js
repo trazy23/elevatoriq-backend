@@ -720,7 +720,9 @@ ${reportSnippet}`;
     });
 
     const raw = resp.content?.[0]?.text?.trim() || '';
-    const result = JSON.parse(raw);
+    // Strip markdown code fences — Claude occasionally wraps JSON in ```json ... ```
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+    const result = JSON.parse(cleaned);
 
     if (!result.verified && result.flags?.length > 0) {
       console.warn(`[ElevatorIQ Verify] ⚠️  ${result.flags.length} unsupported claim(s) detected in report:`);

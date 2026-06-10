@@ -251,7 +251,7 @@ router.get('/:id/output', async (req, res) => {
     // with severity badges. Flag bodies are blurred in the UI — finding, risk,
     // and recommendation are paid content. The full analysis still runs
     // underneath — gating is display-only (newspaper paywall model).
-    if (isFree && caseRow.status === 'completed') {
+    if (isFree && caseRow.status === 'complete') {
       const raw = latestExtraction?.raw_json || {};
       const flags = Array.isArray(raw.flags) ? raw.flags : [];
 

@@ -90,6 +90,11 @@ async function saveFactTables(extractionId, json) {
     // facts_labor
     if (json.labor_data && json.labor_data.length) {
       for (const l of json.labor_data) {
+        // state and market are NOT NULL in schema — skip row rather than crash insert
+        if (!json.state || !json.market) {
+          console.warn(`[Analysis] Skipping facts_labor row — missing required fields (state: ${json.state ?? 'null'}, market: ${json.market ?? 'null'})`);
+          continue;
+        }
         await db.query(
           `INSERT INTO facts_labor
            (extraction_id, state, market, equipment_type, contract_type,
