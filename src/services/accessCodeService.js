@@ -7,6 +7,29 @@
 const crypto = require('crypto');
 const db = require('../db');
 
+let accessCodeSchemaReady = false;
+
+async function ensureAccessCodeSchema() {
+  if (accessCodeSchemaReady) return;
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS access_codes (
+      code TEXT PRIMARY KEY,
+      label TEXT,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ,
+      redeemed_at TIMESTAMPTZ,
+      redeemed_case_id UUID REFERENCES cases(id),
+      redeemed_email TEXT
+    )
+  `);
+  await db.query('CREATE INDEX IF NOT EXISTS idx_access_codes_redeemed_at ON access_codes(redeemed_at)');
+  await db.query('CREATE INDEX IF NOT EXISTS idx_access_codes_created_at ON access_codes(created_at DESC)');
+  await db.query('CREATE INDEX IF NOT EXISTS idx_access_codes_redeemed_case ON access_codes(redeemed_case_id)');
+  accessCodeSchemaReady = true;
+}
+
 function normalizeCode(code) {
   if (!code || typeof code !== 'string') return null;
   const normalized = code.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
@@ -34,6 +57,7 @@ async function isAvailableAccessCode(code) {
   if (isValidAccessCode(normalized)) return true;
 
   try {
+    await ensureAccessCodeSchema();
     const result = await db.query(
       `SELECT code
        FROM access_codes
@@ -60,6 +84,7 @@ function generateCode(prefix = 'EIQ') {
 }
 
 async function createAccessCodes({ count = 1, label = null, expiresAt = null, createdBy = 'admin' } = {}) {
+  await ensureAccessCodeSchema();
   const safeCount = Math.max(1, Math.min(Number(count) || 1, 100));
   const codes = [];
 
@@ -91,6 +116,7 @@ async function createAccessCodes({ count = 1, label = null, expiresAt = null, cr
 }
 
 async function listAccessCodes({ limit = 100 } = {}) {
+  await ensureAccessCodeSchema();
   const safeLimit = Math.max(1, Math.min(Number(limit) || 100, 500));
   const result = await db.query(
     `SELECT code, label, active, created_by, created_at, expires_at, redeemed_at, redeemed_case_id, redeemed_email
@@ -107,6 +133,7 @@ async function deactivateAccessCode(code) {
   const normalized = normalizeCode(code);
   if (!normalized) return { ok: false, code: 'invalid_code', message: 'Enter a valid access code.' };
 
+  await ensureAccessCodeSchema();
   const result = await db.query(
     `UPDATE access_codes
      SET active = FALSE
@@ -135,6 +162,7 @@ async function redeemAccessCode({ code, caseId, email }) {
     return { ok: true, code: normalized, legacy: true };
   }
 
+  await ensureAccessCodeSchema();
   if (!db.pool?.connect) throw new Error('Database transaction client unavailable');
   const client = await db.pool.connect();
 
