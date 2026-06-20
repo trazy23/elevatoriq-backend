@@ -114,7 +114,7 @@ app.get('/readyz', (req, res) => {
     'AWS_SECRET_ACCESS_KEY',
     'EMAIL_PROVIDER_API_KEY',
     'FROM_EMAIL',
-    'REDIS_HOST',
+    ...(process.env.REDIS_ENABLED === 'true' ? ['REDIS_HOST'] : []),
   ];
 
   const missingCore = requiredForCoreApi.filter((key) => !process.env[key]);
@@ -134,6 +134,7 @@ app.get('/readyz', (req, res) => {
       full_pipeline: {
         required: requiredForFullPipeline,
         missing: missingFull,
+        queue_backend: process.env.REDIS_ENABLED === 'true' ? 'redis_bull' : 'semaphore_fallback',
       },
       frontend_static: {
         dist_path: distPath,

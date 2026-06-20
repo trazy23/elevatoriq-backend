@@ -26,28 +26,56 @@ const PLANS = {
     priceId: () => process.env.STRIPE_PRICE_PAY_PER,
     mode: 'payment',
     label: 'Single Review — $99',
+    checkoutName: 'ElevatorIQ Full Analysis — Single Review',
+    checkoutDescription: 'Unlock the full ElevatorIQ report for one elevator contract, invoice, or bid: detailed findings, risk levels, negotiation questions, and downloadable PDF.',
     amount: 9900,
   },
   owner_plan: {
     priceId: () => process.env.STRIPE_PRICE_OWNER_PLAN,
     mode: 'subscription',
     label: 'Owner Plan — $149/month',
+    checkoutName: 'ElevatorIQ Owner Plan',
+    checkoutDescription: 'Monthly access for individual property owners: up to 5 elevator document reviews per month with PDF reports and email delivery.',
     amount: 14900,
+    interval: 'month',
     monthlyReviewCap: 5,
   },
   manager_plan: {
     priceId: () => process.env.STRIPE_PRICE_MANAGER_PLAN,
     mode: 'subscription',
     label: 'Manager Plan — $399/month',
+    checkoutName: 'ElevatorIQ Manager Plan',
+    checkoutDescription: 'Unlimited elevator contract, invoice, and bid reviews for property managers and portfolio operators.',
     amount: 39900,
+    interval: 'month',
   },
   manager_plan_annual: {
     priceId: () => process.env.STRIPE_PRICE_MANAGER_ANNUAL,
     mode: 'subscription',
     label: 'Manager Plan Annual — $3,199/year',
+    checkoutName: 'ElevatorIQ Manager Plan — Annual',
+    checkoutDescription: 'Annual unlimited elevator contract, invoice, and bid reviews for property managers and portfolio operators.',
     amount: 319900,
+    interval: 'year',
   },
 };
+
+function buildCheckoutLineItem(planDef) {
+  const priceData = {
+    currency: 'usd',
+    unit_amount: planDef.amount,
+    product_data: {
+      name: planDef.checkoutName || planDef.label,
+      description: planDef.checkoutDescription || 'ElevatorIQ document review and report access.',
+    },
+  };
+
+  if (planDef.mode === 'subscription') {
+    priceData.recurring = { interval: planDef.interval || 'month' };
+  }
+
+  return { price_data: priceData, quantity: 1 };
+}
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -235,8 +263,11 @@ router.post('/checkout', async (req, res) => {
     const planDef = PLANS[plan];
     if (!planDef) return res.status(400).json({ error: `Unknown plan: ${plan}` });
 
-    const priceId = planDef.priceId();
-    if (!priceId) return res.status(400).json({ error: `Stripe price ID not configured for plan: ${plan}` });
+    // Use explicit Checkout price_data so prospects never see stale/draft copy
+    // from older Stripe Product records. Existing STRIPE_PRICE_* env vars are
+    // still read elsewhere for compatibility, but launch Checkout copy is
+    // controlled here and versioned in code.
+    const lineItem = buildCheckoutLineItem(planDef);
 
     const frontendUrl = process.env.FRONTEND_URL || 'https://elevatoriq.ai';
     const normalizedEmail = email.toLowerCase().trim();
@@ -261,7 +292,7 @@ router.post('/checkout', async (req, res) => {
     const sessionParams = {
       customer: customerId,
       mode: planDef.mode,
-      line_items: [{ price: priceId, quantity: 1 }],
+      line_items: [lineItem],
       success_url: successUrl,
       cancel_url: cancelUrl,
       metadata: {
@@ -274,6 +305,12 @@ router.post('/checkout', async (req, res) => {
     // For subscriptions, allow promotion codes
     if (planDef.mode === 'subscription') {
       sessionParams.allow_promotion_codes = true;
+      sessionParams.subscription_data = {
+        metadata: {
+          plan,
+          customer_email: normalizedEmail,
+        },
+      };
     }
 
     const session = await stripe.checkout.sessions.create(sessionParams);

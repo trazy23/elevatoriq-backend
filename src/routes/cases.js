@@ -43,6 +43,27 @@ function getModule(review_type) {
   return 'B'; // modernization_comparison, single_modernization
 }
 
+function cleanFlagTitle(value) {
+  if (typeof value !== 'string') return null;
+  const cleaned = value
+    .replace(/^\s*[-•*#]+\s*/, '')
+    .replace(/^\s*(high|medium|low|info)\s*(risk|severity)?\s*[:—-]\s*/i, '')
+    .trim();
+  if (!cleaned || cleaned.length < 3) return null;
+  return cleaned.length > 92 ? `${cleaned.slice(0, 89).trim()}…` : cleaned;
+}
+
+function inferFlagTitle(flag, index) {
+  return cleanFlagTitle(flag.title)
+    || cleanFlagTitle(flag.label)
+    || cleanFlagTitle(flag.item)
+    || cleanFlagTitle(flag.issue)
+    || cleanFlagTitle(flag.risk)
+    || cleanFlagTitle(flag.description)
+    || cleanFlagTitle(flag.finding)
+    || `Elevator risk flag ${index + 1}`;
+}
+
 // POST /api/cases — Create a case
 router.post('/', submissionLimiter, async (req, res) => {
   try {
@@ -272,8 +293,8 @@ router.get('/:id/output', async (req, res) => {
 
       // Soft gate: expose title + severity only. Finding/risk/recommendation
       // are omitted here and blurred on the frontend to drive upgrade.
-      const diagnosticFlags = flags.map(f => ({
-        title: f.title || f.item || null,
+      const diagnosticFlags = flags.map((f, index) => ({
+        title: inferFlagTitle(f, index),
         severity: f.severity || null,
         // finding, risk, recommendation intentionally omitted
       }));
