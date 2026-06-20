@@ -1,6 +1,6 @@
 const db = require('../db');
 const { Resend } = require('resend');
-const { BRAND } = require('./reportBranding');
+const { BRAND, formatFromEmail } = require('./reportBranding');
 require('dotenv').config();
 
 const resend = new Resend(process.env.EMAIL_PROVIDER_API_KEY);
@@ -16,6 +16,15 @@ async function scheduleNurtureSequence(caseId, customerEmail, customerName) {
   }
 
   try {
+    const existing = await db.query(
+      `SELECT COUNT(*)::int AS count FROM nurture_emails WHERE case_id=$1`,
+      [caseId]
+    );
+    if ((existing.rows[0]?.count || 0) > 0) {
+      console.log(`[Nurture] Sequence already scheduled for case ${caseId}, skipping duplicate schedule`);
+      return;
+    }
+
     const now = new Date();
     const schedules = [
       { emailType: 'nurture_1', hoursDelay: 24 },
@@ -93,7 +102,7 @@ async function processNurtureQueue() {
  * sendNurtureEmail — Send individual nurture email via Resend
  */
 async function sendNurtureEmail(toEmail, customerName, emailType) {
-  const fromEmail = process.env.FROM_EMAIL || BRAND.reportsFromEmail;
+  const fromEmail = formatFromEmail(process.env.FROM_EMAIL || BRAND.reportsFromEmail);
 
   if (!process.env.EMAIL_PROVIDER_API_KEY) {
     console.log(`[Nurture-Mock] ${emailType} would be sent to ${toEmail}`);

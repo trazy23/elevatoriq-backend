@@ -1,5 +1,5 @@
 const { Resend } = require('resend');
-const { BRAND } = require('./reportBranding');
+const { BRAND, formatFromEmail } = require('./reportBranding');
 const { buildReportFilename } = require('./pdfService');
 require('dotenv').config();
 
@@ -14,7 +14,7 @@ async function sendReport(toEmail, pdfBuffer, reviewType, downloadToken, recipie
   const reviewLabel = reviewType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   const firstName = recipientName ? recipientName.trim().split(/\s+/)[0] : null;
 
-  const fromEmail = process.env.FROM_EMAIL || BRAND.reportsFromEmail;
+  const fromEmail = formatFromEmail(process.env.FROM_EMAIL || BRAND.reportsFromEmail);
 
   if (!process.env.EMAIL_PROVIDER_API_KEY) {
     // MVP: Mock email send
@@ -73,7 +73,7 @@ async function sendSubmissionAlert({ customerEmail, company, name, role, reviewT
   const notifyEmail = process.env.ADMIN_NOTIFY_EMAIL;
   if (!notifyEmail) return; // Not configured — skip silently
 
-  const fromEmail = process.env.FROM_EMAIL || BRAND.reportsFromEmail;
+  const fromEmail = formatFromEmail(process.env.FROM_EMAIL || BRAND.reportsFromEmail);
   const reviewLabel = (reviewType || 'auto').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   const roleLabels = {
     property_manager: 'Property Manager',
@@ -154,7 +154,7 @@ async function sendSubmissionAlert({ customerEmail, company, name, role, reviewT
  * sendQualityFailure — Notify customer when analysis couldn't generate a deliverable report
  */
 async function sendQualityFailure(toEmail, reviewType, caseId) {
-  const fromEmail = process.env.FROM_EMAIL || BRAND.reportsFromEmail;
+  const fromEmail = formatFromEmail(process.env.FROM_EMAIL || BRAND.reportsFromEmail);
   const reviewLabel = (reviewType || 'review').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
   if (!process.env.EMAIL_PROVIDER_API_KEY) {

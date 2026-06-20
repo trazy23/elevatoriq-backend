@@ -2,10 +2,17 @@ const BRAND = {
   name: 'ElevatorIQ',
   domain: 'elevatoriq.ai',
   reportsFromEmail: 'reports@elevatoriq.ai',
+  reportsFromName: 'ElevatorIQ',
   tagline: 'Structured intelligence, not guesswork.',
   footerTagline: '"Upload. Analyze. Decide."',
   replacementNote: 'Branded report style is aligned to the provided ElevatorIQ sample layout and tone.',
 };
+
+function formatFromEmail(email = BRAND.reportsFromEmail, displayName = BRAND.reportsFromName) {
+  const trimmedEmail = String(email || BRAND.reportsFromEmail).trim();
+  if (trimmedEmail.includes('<') && trimmedEmail.includes('>')) return trimmedEmail;
+  return `${displayName} <${trimmedEmail}>`;
+}
 
 const COLORS = {
   // Dark backgrounds
@@ -52,5 +59,6 @@ module.exports = {
   BRAND,
   COLORS,
   TYPOGRAPHY,
+  formatFromEmail,
   logoWordmarkHtml,
 };
