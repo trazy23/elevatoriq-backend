@@ -7,7 +7,7 @@ const { getStructuredReportKey } = require('../utils/reportArtifacts');
 const { inferReviewTypeFromDocuments } = require('../services/documentTypeService');
 const { sendSubmissionAlert } = require('../services/emailService');
 const { isDisposableDomain } = require('../services/freeEligibilityService');
-const { isValidAccessCode } = require('../services/accessCodeService');
+const { isValidAccessCode, isAvailableAccessCode, redeemAccessCode } = require('../services/accessCodeService');
 
 // Extract real client IP — respects X-Forwarded-For from Render/proxies
 function getClientIp(req) {
@@ -123,6 +123,22 @@ router.post('/', submissionLimiter, async (req, res) => {
       [resolvedCustomerId, normalizedReviewType, module, state, market, equipment_type, resolvedRecipientEmail, paymentStatus, clientIp]
     );
     const caseId = result.rows[0].id;
+
+    // If a valid one-time code was entered before analysis, consume it now and
+    // convert the case to paid so the worker generates the PDF/email deliverable.
+    if (paymentStatus === 'free' && access_code && await isAvailableAccessCode(access_code)) {
+      const redemption = await redeemAccessCode({
+        code: access_code,
+        caseId,
+        email: resolvedRecipientEmail,
+      });
+      if (!redemption.ok) {
+        return res.status(400).json({
+          error: redemption.message,
+          code: redemption.code,
+        });
+      }
+    }
 
     // Fire-and-forget owner alert — never blocks the response
     sendSubmissionAlert({

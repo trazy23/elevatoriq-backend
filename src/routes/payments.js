@@ -2,7 +2,16 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { addJob } = require('../workers/analysisWorker');
-const { isValidAccessCode: _isValidAccessCode } = require('../services/accessCodeService');
+const {
+  isValidAccessCode: _isValidAccessCode,
+  isAvailableAccessCode,
+  redeemAccessCode,
+} = require('../services/accessCodeService');
+const storageService = require('../services/storageService');
+const pdfService = require('../services/pdfService');
+const emailService = require('../services/emailService');
+const { getStructuredReportKey } = require('../utils/reportArtifacts');
+const { randomUUID } = require('crypto');
 require('dotenv').config();
 
 // Lazy-init Stripe so the server still boots if STRIPE_SECRET_KEY is not yet set
@@ -50,7 +59,7 @@ async function getAccessLevel(email, code) {
   if (!normalizedEmail) return { access: 'none', tier: null };
 
   // Access code bypass — grants unlimited free access (for pilots, testing, gifted access)
-  if (isValidAccessCode(code)) {
+  if (await isAvailableAccessCode(code)) {
     return { access: 'free', tier: 'access_code', unlimited: true };
   }
 
@@ -110,6 +119,73 @@ async function getAccessLevel(email, code) {
   return { access: 'none', tier: null };
 }
 
+async function ensurePaidReportForCase(caseId) {
+  const caseResult = await db.query(
+    `SELECT c.*, cu.name, cu.company
+     FROM cases c
+     LEFT JOIN customers cu ON cu.id = c.customer_id
+     WHERE c.id = $1`,
+    [caseId]
+  );
+  if (!caseResult.rows.length) {
+    const err = new Error('Case not found');
+    err.status = 404;
+    throw err;
+  }
+
+  const caseRow = caseResult.rows[0];
+
+  const existingReport = await db.query(
+    `SELECT storage_path, download_token
+     FROM reports
+     WHERE case_id=$1
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [caseId]
+  );
+  if (existingReport.rows.length) {
+    return {
+      case: caseRow,
+      reportDownloadPath: `/api/reports/download/${existingReport.rows[0].download_token}`,
+    };
+  }
+
+  if (caseRow.status !== 'complete') {
+    return { case: caseRow, reportDownloadPath: null, pending: true };
+  }
+
+  const structuredKey = getStructuredReportKey(caseId);
+  const structuredBuffer = await storageService.download(structuredKey);
+  const structured = JSON.parse(structuredBuffer.toString('utf8'));
+  const reportBody = structured.report_body;
+  if (!reportBody) throw new Error('Structured report body is unavailable for this case');
+
+  const token = randomUUID();
+  const { key: pdfKey, buffer: pdfBuffer } = await pdfService.generateAndUploadPDF(
+    reportBody,
+    caseId,
+    caseRow.review_type,
+    token,
+    caseRow.elevatoriq_score
+  );
+
+  await db.query(
+    `INSERT INTO reports (case_id, storage_path, download_token) VALUES ($1,$2,$3)`,
+    [caseId, pdfKey, token]
+  );
+
+  if (caseRow.customer_email) {
+    try {
+      await emailService.sendReport(caseRow.customer_email, pdfBuffer, caseRow.review_type, token, caseRow.name, caseRow.company);
+      await db.query(`UPDATE reports SET emailed_at=NOW() WHERE download_token=$1`, [token]);
+    } catch (emailErr) {
+      console.warn(`[AccessCode] Report email failed for redeemed case ${caseId}:`, emailErr.message);
+    }
+  }
+
+  return { case: caseRow, reportDownloadPath: `/api/reports/download/${token}` };
+}
+
 // ─── GET /api/payments/status ───────────────────────────────────────────────
 router.get('/status', async (req, res) => {
   try {
@@ -120,6 +196,32 @@ router.get('/status', async (req, res) => {
   } catch (err) {
     console.error('[Payments] Status check error:', err.message);
     res.status(500).json({ error: 'Failed to check payment status' });
+  }
+});
+
+// ─── POST /api/payments/redeem-access-code ──────────────────────────────────
+// Lets a user unlock an already-created preview either by paying or by entering
+// a one-time code supplied by ElevatorIQ.
+router.post('/redeem-access-code', async (req, res) => {
+  try {
+    const { code, caseId, email } = req.body || {};
+    const redeemed = await redeemAccessCode({ code, caseId, email });
+    if (!redeemed.ok) {
+      return res.status(400).json({ error: redeemed.message, code: redeemed.code });
+    }
+
+    const report = await ensurePaidReportForCase(caseId);
+    res.json({
+      ok: true,
+      access: 'paid',
+      tier: 'access_code',
+      pending: !!report.pending,
+      caseId,
+      reportDownloadPath: report.reportDownloadPath,
+    });
+  } catch (err) {
+    console.error('[Payments] Access code redemption error:', err.message);
+    res.status(err.status || 500).json({ error: 'Failed to redeem access code', detail: err.message });
   }
 });
 

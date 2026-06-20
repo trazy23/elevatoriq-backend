@@ -143,6 +143,51 @@ router.get('/queue', requireAdminKey, async (req, res) => {
   }
 });
 
+// GET /api/admin/access-codes — List one-time access codes
+router.get('/access-codes', requireAdminKey, async (req, res) => {
+  try {
+    const { listAccessCodes } = require('../services/accessCodeService');
+    const codes = await listAccessCodes({ limit: req.query.limit });
+    res.json({ total: codes.length, codes });
+  } catch (err) {
+    console.error('GET /admin/access-codes error:', err);
+    res.status(500).json({ error: 'Failed to list access codes', detail: err.message });
+  }
+});
+
+// POST /api/admin/access-codes — Generate one-time access codes
+router.post('/access-codes', requireAdminKey, async (req, res) => {
+  try {
+    const { createAccessCodes } = require('../services/accessCodeService');
+    const codes = await createAccessCodes({
+      count: req.body?.count || 1,
+      label: req.body?.label || null,
+      expiresAt: req.body?.expires_at || null,
+      createdBy: 'admin',
+    });
+    res.json({ ok: true, count: codes.length, codes });
+  } catch (err) {
+    console.error('POST /admin/access-codes error:', err);
+    res.status(500).json({ error: 'Failed to create access codes', detail: err.message });
+  }
+});
+
+
+// POST /api/admin/access-codes/:code/deactivate — Revoke an unused one-time access code
+router.post('/access-codes/:code/deactivate', requireAdminKey, async (req, res) => {
+  try {
+    const { deactivateAccessCode } = require('../services/accessCodeService');
+    const result = await deactivateAccessCode(req.params.code);
+    if (!result.ok) {
+      return res.status(404).json({ error: result.message || 'Access code not found or already used', code: result.code });
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('POST /admin/access-codes/:code/deactivate error:', err);
+    res.status(500).json({ error: 'Failed to deactivate access code', detail: err.message });
+  }
+});
+
 // POST /api/admin/cases/:id/retry — Reset a stuck/orphaned case and re-queue it
 router.post('/cases/:id/retry', requireAdminKey, async (req, res) => {
   const { id } = req.params;
