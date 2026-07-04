@@ -36,9 +36,20 @@ function normalizeCode(code) {
   return normalized || null;
 }
 
+function getTemporaryTestCodes() {
+  // Temporary production smoke-test code for Trey. This is intentionally
+  // time-boxed and should be removed after the live unlock flow is verified.
+  const expiresAt = Date.parse('2026-07-08T23:59:59-04:00');
+  if (Number.isNaN(expiresAt) || Date.now() > expiresAt) return [];
+  return ['EIQ-EC73B-90F6A'];
+}
+
 function getValidCodes() {
   const raw = process.env.ACCESS_CODES || '';
-  return raw.split(',').map(normalizeCode).filter(Boolean);
+  return [
+    ...raw.split(',').map(normalizeCode).filter(Boolean),
+    ...getTemporaryTestCodes(),
+  ];
 }
 
 function isValidAccessCode(code) {
