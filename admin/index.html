@@ -281,6 +281,10 @@
     return document.getElementById('cfg-key').value.trim();
   }
 
+  function adminHeaders(extra) {
+    return Object.assign({ 'x-admin-key': adminKey() }, extra || {});
+  }
+
   function showTab(tab) {
     currentTab = tab;
     document.getElementById('tab-metrics').classList.toggle('active', tab === 'metrics');
@@ -315,7 +319,7 @@
     const wrap = document.getElementById('access-codes-table');
     wrap.innerHTML = '<span class="muted">Loading access codes...</span>';
     try {
-      const res = await fetch('/api/admin/access-codes?limit=250&key=' + encodeURIComponent(key));
+      const res = await fetch('/api/admin/access-codes?limit=250', { headers: adminHeaders() });
       if (!res.ok) throw new Error('HTTP ' + res.status + ' — check your admin key');
       const data = await res.json();
       renderAccessCodes(data.codes || []);
@@ -361,9 +365,9 @@
     btn.disabled = true;
     showStatus('Generating access codes...', 'info');
     try {
-      const res = await fetch('/api/admin/access-codes?key=' + encodeURIComponent(key), {
+      const res = await fetch('/api/admin/access-codes', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: adminHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ count, label: label || null, expires_at: expires || null }),
       });
       const data = await res.json().catch(() => ({}));
@@ -383,7 +387,7 @@
     if (!key) { showStatus('Enter your admin key above.', 'error'); return; }
     if (!confirm('Deactivate ' + code + '? It will no longer unlock reports.')) return;
     try {
-      const res = await fetch('/api/admin/access-codes/' + encodeURIComponent(code) + '/deactivate?key=' + encodeURIComponent(key), { method: 'POST' });
+      const res = await fetch('/api/admin/access-codes/' + encodeURIComponent(code) + '/deactivate', { method: 'POST', headers: adminHeaders() });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || data.error || 'HTTP ' + res.status);
       showStatus('Deactivated ' + code + '.', 'info');
@@ -409,7 +413,7 @@
     showStatus('Loading...', 'info');
 
     try {
-      const res = await fetch('/api/admin/metrics?key=' + encodeURIComponent(key));
+      const res = await fetch('/api/admin/metrics', { headers: adminHeaders() });
       if (!res.ok) throw new Error('HTTP ' + res.status + ' — check your admin key');
       const data = await res.json();
       showStatus('');

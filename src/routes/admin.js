@@ -4,7 +4,7 @@ const db = require('../db');
 
 // Simple API key auth middleware
 function requireAdminKey(req, res, next) {
-  const key = req.headers['x-admin-key'] || req.query.key;
+  const key = req.headers['x-admin-key'];
   const expected = process.env.ADMIN_API_KEY;
   if (!expected) {
     return res.status(503).json({ error: 'Admin key not configured on server' });

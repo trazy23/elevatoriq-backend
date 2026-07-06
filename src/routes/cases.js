@@ -6,8 +6,9 @@ const { addJob } = require('../workers/analysisWorker');
 const { getStructuredReportKey } = require('../utils/reportArtifacts');
 const { inferReviewTypeFromDocuments } = require('../services/documentTypeService');
 const { sendSubmissionAlert } = require('../services/emailService');
-const { isDisposableDomain } = require('../services/freeEligibilityService');
+const { checkFreeEligibility, isDisposableDomain } = require('../services/freeEligibilityService');
 const { isValidAccessCode, isAvailableAccessCode, redeemAccessCode } = require('../services/accessCodeService');
+const { verifyTurnstileToken } = require('../services/botCheckService');
 
 // Extract real client IP — respects X-Forwarded-For from Render/proxies
 function getClientIp(req) {
@@ -83,6 +84,9 @@ router.post('/', submissionLimiter, async (req, res) => {
       name,
       role,
       access_code,
+      turnstile_token,
+      cf_turnstile_response,
+      captcha_token,
     } = req.body;
     const resolvedRecipientEmail =
       normalizeEmail(customer_email)
@@ -97,6 +101,20 @@ router.post('/', submissionLimiter, async (req, res) => {
     const normalizedName = (name && typeof name === 'string') ? name.trim() || null : null;
     const validRoles = ['property_manager', 'facilities_director', 'building_owner', 'consultant', 'other'];
     const normalizedRole = validRoles.includes(role) ? role : null;
+
+    if (!resolvedRecipientEmail) {
+      return res.status(400).json({
+        error: 'A valid email address is required to create a review.',
+        code: 'email_required',
+      });
+    }
+
+    if (req.body && Object.keys(req.body).length === 0) {
+      return res.status(400).json({
+        error: 'A valid email address is required to create a review.',
+        code: 'email_required',
+      });
+    }
 
     // Upsert customer record — update name/role only if newly provided (don't overwrite with null)
     let resolvedCustomerId = customer_id || null;
@@ -125,15 +143,36 @@ router.post('/', submissionLimiter, async (req, res) => {
     // 'free' for first-review-free and subscription flows (run triggered directly)
     const paymentStatus = req.body.payment_status === 'pending_payment' ? 'pending_payment' : 'free';
     const clientIp = getClientIp(req);
+    const hasAccessCode = isValidAccessCode(access_code);
 
     // Block disposable/throwaway email domains — we need a real email for the nurture sequence.
-    // No per-email or per-IP usage limits: every submission gets a free diagnostic (newspaper model).
-    if (paymentStatus === 'free' && !isValidAccessCode(access_code)) {
+    // Also cap free full-cost runs by normalized email/IP to prevent abuse.
+    if (paymentStatus === 'free' && !hasAccessCode) {
+      const botCheck = await verifyTurnstileToken(
+        turnstile_token || cf_turnstile_response || captcha_token,
+        clientIp,
+      );
+      if (!botCheck.ok) {
+        return res.status(botCheck.status).json({
+          error: botCheck.message,
+          code: botCheck.code,
+        });
+      }
+
       if (isDisposableDomain(resolvedRecipientEmail)) {
         return res.status(403).json({
           error: 'Free review not available',
           code: 'disposable_email',
           message: 'Disposable email addresses are not eligible for a free review. Please use a work or personal email.',
+        });
+      }
+
+      const eligibility = await checkFreeEligibility(resolvedRecipientEmail, clientIp);
+      if (!eligibility.eligible) {
+        return res.status(403).json({
+          error: 'Free review not available',
+          code: eligibility.reason,
+          message: eligibility.message,
         });
       }
     }

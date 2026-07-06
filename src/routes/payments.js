@@ -350,16 +350,22 @@ router.get('/verify-session', async (req, res) => {
 // NOTE: This route is registered in index.js with express.raw() body parser
 // to receive the raw request body needed for webhook signature verification.
 async function handleStripeWebhook(req, res) {
-  const stripe = getStripe();
   const sig = req.headers['stripe-signature'];
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  if (process.env.NODE_ENV === 'production' && !webhookSecret) {
+    console.error('[Webhook] STRIPE_WEBHOOK_SECRET not configured in production — refusing unsigned event');
+    return res.status(500).json({ error: 'Stripe webhook secret is not configured' });
+  }
+
+  const stripe = getStripe();
 
   let event;
   try {
     if (webhookSecret) {
       event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
     } else {
-      // Dev mode: no signature verification
+      // Local/dev only: no signature verification. Production refuses above.
       console.warn('[Webhook] STRIPE_WEBHOOK_SECRET not set — skipping signature verification');
       event = JSON.parse(req.body.toString());
     }

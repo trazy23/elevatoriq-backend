@@ -9,6 +9,7 @@ const db = require('./src/db');
 const { addJob } = require('./src/workers/analysisWorker');
 
 const app = express();
+app.set('trust proxy', 1);
 
 function parseCsvEnv(value = '') {
   return value
@@ -114,6 +115,8 @@ app.get('/readyz', (req, res) => {
     'AWS_SECRET_ACCESS_KEY',
     'EMAIL_PROVIDER_API_KEY',
     'FROM_EMAIL',
+    'STRIPE_WEBHOOK_SECRET',
+    ...(process.env.NODE_ENV === 'production' ? ['TURNSTILE_SECRET_KEY'] : []),
     ...(process.env.REDIS_ENABLED === 'true' ? ['REDIS_HOST'] : []),
   ];
 
@@ -175,7 +178,7 @@ module.exports = app;
 
 // Schedule daily aggregation job — runs at 3:00 AM every day
 // Only runs if DATABASE_URL is present (i.e., production or staging)
-if (process.env.DATABASE_URL) {
+if (process.env.DATABASE_URL && process.env.NODE_ENV !== 'test') {
   cron.schedule('0 3 * * *', () => {
     console.log('[Cron] Running daily aggregation job...');
     runAggregation()
@@ -243,7 +246,7 @@ async function recoverOrphanedJobs(source = 'Startup') {
 // Render free tier kills in-flight workers on each deploy. Between deploys,
 // a case could sit stuck indefinitely. This cron proactively recovers them
 // without needing a new deploy or manual Supabase intervention.
-if (process.env.DATABASE_URL) {
+if (process.env.DATABASE_URL && process.env.NODE_ENV !== 'test') {
   cron.schedule('*/10 * * * *', () => {
     recoverOrphanedJobs('HealthCheck')
       .then(({ recovered }) => {

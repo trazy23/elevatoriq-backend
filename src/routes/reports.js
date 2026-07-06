@@ -23,6 +23,10 @@ router.get('/download/:token', async (req, res) => {
     }
 
     const report = result.rows[0];
+    if (report.token_expires_at && new Date(report.token_expires_at).getTime() <= Date.now()) {
+      return res.status(404).json({ error: 'Report not found or link has expired' });
+    }
+
     // storageService.download falls back to mock storage when S3 is unavailable
     const pdfBuffer = await storageService.download(report.storage_path);
 
