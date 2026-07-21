@@ -15,6 +15,7 @@ function centsToDollars(cents) {
 async function getSummary() {
   await ensureStarterGrowthData();
   await quarantineBadProspects();
+  await normalizeNoEmailCampaignFailures();
 
   const [prospects, campaigns, approvals, agents, recentActivity] = await Promise.all([
     db.query(`
@@ -304,6 +305,7 @@ function buildExecutiveSummary({ p, c, a, agents }) {
 
 async function listApprovals() {
   await quarantineBadProspects();
+  await normalizeNoEmailCampaignFailures();
   const result = await db.query(`
     SELECT a.*, ag.name AS requested_by_agent_name
     FROM growth_approvals a
@@ -706,6 +708,32 @@ async function quarantineBadProspects() {
   return { prospects: prospects.rowCount, recipients: recipients.rowCount, campaigns: campaigns.rowCount, approvals: approvals.rowCount };
 }
 
+async function normalizeNoEmailCampaignFailures() {
+  const approvals = await db.query(`
+    UPDATE growth_approvals
+    SET status='needs_edits',
+        decision_notes=concat_ws('\n\n', NULLIF(decision_notes,''), 'Changed from failed to needs_edits: approval tried to send a campaign with no verified recipient emails. No emails were sent.'),
+        updated_at=NOW()
+    WHERE status='failed'
+      AND action_type='queue_campaign'
+      AND COALESCE((action_result->>'sent')::int, 0) = 0
+      AND COALESCE((action_result->>'skipped')::int, 0) > 0
+    RETURNING item_id
+  `);
+
+  const campaignIds = approvals.rows.map((row) => row.item_id).filter(Boolean);
+  if (campaignIds.length) {
+    await db.query(`
+      UPDATE growth_campaigns
+      SET status='needs_edits', approval_status='needs_edits', updated_at=NOW()
+      WHERE id = ANY($1::uuid[])
+        AND status IN ('paused','running','ready_for_approval','approved','queued')
+    `, [campaignIds]);
+  }
+
+  return { approvals: approvals.rowCount, campaigns: campaignIds.length };
+}
+
 async function enrichProspectCandidate(candidate, market) {
   const pages = await fetchCandidatePages(candidate.website_url);
   const text = pages.map((page) => `${page.url}\n${page.text}`).join('\n\n').slice(0, 12000);
@@ -996,6 +1024,7 @@ async function runOutreachAgent() {
     SELECT * FROM growth_prospects
     WHERE status IN ('researched','ready_for_approval','approved')
       AND COALESCE(approval_status,'not_requested') <> 'rejected'
+      AND NULLIF(trim(COALESCE(email,'')), '') IS NOT NULL
       AND company !~* '(indeed|simplyhired|glassdoor|ziprecruiter|monster|careerbuilder|job listings?|jobs in|employment)'
       AND COALESCE(website_url,'') !~* '(indeed\\.com|simplyhired\\.com|glassdoor\\.com|ziprecruiter\\.com|monster\\.com|careerbuilder\\.com|zippia\\.com|jooble\\.org|talent\\.com|salary\\.com|builtin\\.com|applicantpro\\.com|greenhouse\\.io|lever\\.co|workdayjobs\\.com)'
       AND COALESCE(notes,'') !~* '(job listings?|jobs in|employment in|hiring site)'
@@ -1007,13 +1036,35 @@ async function runOutreachAgent() {
           AND created_at > NOW() - INTERVAL '21 days'
       )
     ORDER BY
-      CASE WHEN email IS NOT NULL AND email <> '' THEN 0 ELSE 1 END,
       priority_score DESC,
       created_at DESC
     LIMIT 5
   `);
   if (!prospects.rows.length) {
-    return { created: 0, message: 'No eligible prospects found. Run Prospecting Agent first, or review existing campaign drafts before creating another batch.', current_work: 'Waiting for fresh prospects.' };
+    const researchedWithoutEmail = await db.query(`
+      SELECT COUNT(*)::int AS count
+      FROM growth_prospects
+      WHERE status IN ('researched','ready_for_approval','approved')
+        AND COALESCE(approval_status,'not_requested') <> 'rejected'
+        AND NULLIF(trim(COALESCE(email,'')), '') IS NULL
+    `);
+    const count = researchedWithoutEmail.rows[0]?.count || 0;
+    const approval = await createApprovalIfMissing({
+      itemType: 'other',
+      title: 'Contact enrichment needed before drafting live outreach emails',
+      summary: `${count} researched prospect${Number(count) === 1 ? '' : 's'} currently lack verified email addresses. Draft Outreach Batch now requires sendable recipients so CEO approvals do not fail or pretend to send. Next step: enrich emails manually or connect an enrichment provider such as Apollo, Clay, Hunter, or People Data Labs.`,
+      riskLevel: 'low',
+      agentKey: 'outreach_agent',
+      actionType: 'none',
+      actionPayload: { researched_without_email: Number(count), reason: 'no_sendable_recipients' },
+    });
+    return {
+      created: approval.created ? 1 : 0,
+      needs_review: true,
+      message: `No sendable prospects with verified emails yet. ${count} researched prospect${Number(count) === 1 ? '' : 's'} need contact enrichment first.`,
+      current_work: 'Waiting for verified recipient emails before drafting live-send approvals.',
+      approval_id: approval.id,
+    };
   }
 
   const drafts = prospects.rows.map((prospect) => buildPersonalizedOutreachDraft(prospect));
@@ -1348,6 +1399,43 @@ async function sendApprovedCampaign(campaignId) {
     ORDER BY created_at ASC
   `, [campaignId]);
 
+  const missingRequiredFields = recipients.rows.filter((recipient) => !recipient.email || !recipient.final_subject || !recipient.final_body);
+  const sendableRecipients = recipients.rows.filter((recipient) => recipient.email && recipient.final_subject && recipient.final_body);
+  if (!sendableRecipients.length) {
+    await db.query(`UPDATE growth_campaigns SET status='needs_edits', approval_status='needs_edits', updated_at=NOW() WHERE id=$1`, [campaignId]);
+    if (missingRequiredFields.length) {
+      await db.query(`
+        UPDATE growth_campaign_recipients
+        SET status='failed', error='Missing verified email, subject, or body; enrich before CEO send approval.', updated_at=NOW()
+        WHERE campaign_id=$1
+          AND status IN ('ready_for_approval','approved','queued','failed')
+          AND (NULLIF(trim(COALESCE(email,'')), '') IS NULL OR NULLIF(trim(COALESCE(final_subject,'')), '') IS NULL OR NULLIF(trim(COALESCE(final_body,'')), '') IS NULL)
+      `, [campaignId]);
+    }
+    await logActivity({
+      agentKey: 'outreach_agent',
+      eventType: 'campaign_send_blocked',
+      title: `${campaign.rows[0].name} needs contact enrichment`,
+      detail: `No sendable recipients found. ${missingRequiredFields.length} recipient draft(s) need verified email/subject/body before live sending.`,
+      payload: { campaign_id: campaignId, missing_required_fields: missingRequiredFields.length },
+    });
+    return {
+      status: 'needs_edits',
+      provider: 'resend',
+      campaign_id: campaignId,
+      sent: 0,
+      skipped: missingRequiredFields.length,
+      failed: 0,
+      message: `No emails were sent. This campaign has 0 sendable recipients; enrich recipient emails before approving send.`,
+      results: missingRequiredFields.map((recipient) => ({
+        recipient_id: recipient.id,
+        company: recipient.company,
+        status: 'needs_edits',
+        error: 'Missing verified email/subject/body',
+      })),
+    };
+  }
+
   let sent = 0;
   let skipped = 0;
   let failed = 0;
@@ -1359,7 +1447,7 @@ async function sendApprovedCampaign(campaignId) {
       // eslint-disable-next-line no-await-in-loop
       await db.query(`
         UPDATE growth_campaign_recipients
-        SET status='failed', error='Missing email, subject, or body; needs enrichment before sending.', updated_at=NOW()
+        SET status='failed', error='Missing verified email, subject, or body; enrich before sending.', updated_at=NOW()
         WHERE id=$1
       `, [recipient.id]);
       results.push({ recipient_id: recipient.id, company: recipient.company, status: 'skipped', error: 'Missing email/subject/body' });
