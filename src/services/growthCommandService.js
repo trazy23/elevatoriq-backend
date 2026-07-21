@@ -678,11 +678,11 @@ async function upsertResearchedProspect(prospect, defaultMarket) {
     SELECT id FROM growth_prospects
     WHERE lower(company)=lower($1::text)
        OR (
-         $8::text IS NOT NULL
-         AND lower(regexp_replace(COALESCE(website_url,''), '^https?://(www\\.)?|/.*$', '', 'g'))=lower(regexp_replace($8::text, '^https?://(www\\.)?|/.*$', '', 'g'))
+         $2::text IS NOT NULL
+         AND lower(regexp_replace(COALESCE(website_url,''), '^https?://(www\\.)?|/.*$', '', 'g'))=lower(regexp_replace($2::text, '^https?://(www\\.)?|/.*$', '', 'g'))
        )
     LIMIT 1
-  `, values);
+  `, [prospect.company, prospect.website_url]);
 
   if (!existing.rows.length) {
     const insert = await db.query(`
