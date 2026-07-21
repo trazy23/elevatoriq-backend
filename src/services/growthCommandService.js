@@ -634,6 +634,14 @@ function isBadProspectRecord(prospect = {}) {
 
 async function quarantineBadProspects() {
   const badPattern = '(indeed|simplyhired|glassdoor|ziprecruiter|monster|careerbuilder|zippia|jooble|talent\\.com|salary\\.com|builtin|applicantpro|greenhouse|lever\\.co|workdayjobs|job listings?|jobs in|employment in|hiring site|facilities director jobs?|director facilities management jobs?)';
+  const badApprovals = await db.query(`
+    UPDATE growth_approvals
+    SET status='rejected', decided_at=NOW(), decision_notes='Auto-rejected: contained job board / employment listing / non-ICP prospect data.'
+    WHERE status='pending'
+      AND (title ~* $1 OR COALESCE(summary,'') ~* $1)
+    RETURNING id
+  `, [badPattern]);
+
   const badProspects = await db.query(`
     SELECT id FROM growth_prospects
     WHERE status NOT IN ('do_not_contact','not_fit')
@@ -646,7 +654,7 @@ async function quarantineBadProspects() {
   `, [badPattern]);
 
   const ids = badProspects.rows.map((row) => row.id);
-  if (!ids.length) return { prospects: 0, recipients: 0, campaigns: 0, approvals: 0 };
+  if (!ids.length) return { prospects: 0, recipients: 0, campaigns: 0, approvals: badApprovals.rowCount };
 
   const prospects = await db.query(`
     UPDATE growth_prospects
@@ -668,7 +676,7 @@ async function quarantineBadProspects() {
 
   const campaignIds = Array.from(new Set(recipients.rows.map((row) => row.campaign_id).filter(Boolean)));
   let campaigns = { rowCount: 0 };
-  let approvals = { rowCount: 0 };
+  let approvals = { rowCount: badApprovals.rowCount };
   if (campaignIds.length) {
     campaigns = await db.query(`
       UPDATE growth_campaigns
@@ -677,13 +685,14 @@ async function quarantineBadProspects() {
         AND status IN ('draft','ready_for_approval','approved','queued','running')
     `, [campaignIds]);
 
-    approvals = await db.query(`
+    const campaignApprovals = await db.query(`
       UPDATE growth_approvals
       SET status='rejected', decided_at=NOW(), decision_notes='Auto-rejected: campaign contained job board / employment listing prospects.'
       WHERE item_type='campaign'
         AND item_id = ANY($1::uuid[])
         AND status='pending'
     `, [campaignIds]);
+    approvals = { rowCount: badApprovals.rowCount + campaignApprovals.rowCount };
   }
 
   await logActivity({
