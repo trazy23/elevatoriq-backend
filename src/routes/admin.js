@@ -229,6 +229,72 @@ router.post('/process-nurture', requireAdminKey, async (req, res) => {
 });
 
 // GET /api/admin/metrics — Dashboard metrics for free/paid tier analytics
+router.get('/growth/summary', requireAdminKey, async (req, res) => {
+  try {
+    const growth = require('../services/growthCommandService');
+    res.json(await growth.getSummary());
+  } catch (err) {
+    console.error('GET /admin/growth/summary error:', err);
+    res.status(500).json({ error: 'Failed to load growth summary', detail: err.message });
+  }
+});
+
+router.get('/growth/approvals', requireAdminKey, async (req, res) => {
+  try {
+    const growth = require('../services/growthCommandService');
+    res.json({ approvals: await growth.listApprovals() });
+  } catch (err) {
+    console.error('GET /admin/growth/approvals error:', err);
+    res.status(500).json({ error: 'Failed to load growth approvals', detail: err.message });
+  }
+});
+
+router.get('/growth/campaigns', requireAdminKey, async (req, res) => {
+  try {
+    const growth = require('../services/growthCommandService');
+    res.json({ campaigns: await growth.listCampaigns() });
+  } catch (err) {
+    console.error('GET /admin/growth/campaigns error:', err);
+    res.status(500).json({ error: 'Failed to load growth campaigns', detail: err.message });
+  }
+});
+
+router.get('/growth/prospects', requireAdminKey, async (req, res) => {
+  try {
+    const growth = require('../services/growthCommandService');
+    res.json({ prospects: await growth.listProspects() });
+  } catch (err) {
+    console.error('GET /admin/growth/prospects error:', err);
+    res.status(500).json({ error: 'Failed to load growth prospects', detail: err.message });
+  }
+});
+
+router.post('/growth/approvals/:id/approve', requireAdminKey, async (req, res) => {
+  try {
+    const growth = require('../services/growthCommandService');
+    const result = await growth.approveItem(req.params.id, req.body?.notes || '');
+    if (!result.ok) return res.status(result.status || 400).json({ error: result.error });
+    res.json(result);
+  } catch (err) {
+    console.error('POST /admin/growth/approvals/:id/approve error:', err);
+    res.status(500).json({ error: 'Failed to approve growth item', detail: err.message });
+  }
+});
+
+router.post('/growth/approvals/:id/reject', requireAdminKey, async (req, res) => {
+  try {
+    const growth = require('../services/growthCommandService');
+    const status = req.body?.status === 'rejected' ? 'rejected' : 'needs_edits';
+    const result = await growth.rejectItem(req.params.id, status, req.body?.notes || '');
+    if (!result.ok) return res.status(result.status || 400).json({ error: result.error });
+    res.json(result);
+  } catch (err) {
+    console.error('POST /admin/growth/approvals/:id/reject error:', err);
+    res.status(500).json({ error: 'Failed to reject growth item', detail: err.message });
+  }
+});
+
+// GET /api/admin/metrics — Dashboard metrics for free/paid tier analytics
 router.get('/metrics', requireAdminKey, async (req, res) => {
   try {
     const [summary, revenue, reviewTypes, dailyVolume, nurture] = await Promise.all([
