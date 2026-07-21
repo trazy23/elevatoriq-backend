@@ -14,6 +14,7 @@ function centsToDollars(cents) {
 
 async function getSummary() {
   await ensureStarterGrowthData();
+  await quarantineBadProspects();
 
   const [prospects, campaigns, approvals, agents, recentActivity] = await Promise.all([
     db.query(`
@@ -26,6 +27,8 @@ async function getSummary() {
         COUNT(*) FILTER (WHERE status='paid')::int AS paid,
         COALESCE(SUM(revenue_cents),0)::int AS revenue_cents
       FROM growth_prospects
+      WHERE status NOT IN ('not_fit','do_not_contact')
+        AND COALESCE(approval_status,'not_requested') <> 'rejected'
     `),
     db.query(`
       SELECT
@@ -34,6 +37,7 @@ async function getSummary() {
         COUNT(*) FILTER (WHERE status IN ('queued','running'))::int AS active,
         COUNT(*) FILTER (WHERE status IN ('sent','completed'))::int AS completed
       FROM growth_campaigns
+      WHERE status <> 'rejected'
     `),
     db.query(`
       SELECT
@@ -42,6 +46,7 @@ async function getSummary() {
         COUNT(*) FILTER (WHERE status='executed')::int AS executed,
         COUNT(*) FILTER (WHERE status='failed')::int AS failed
       FROM growth_approvals
+      WHERE status <> 'rejected'
     `),
     db.query(`SELECT key, name, lane, status, current_work, last_output, last_run_at, next_run_at FROM growth_agents ORDER BY lane, name`),
     db.query(`SELECT agent_key, event_type, title, detail, created_at FROM growth_activity_events ORDER BY created_at DESC LIMIT 15`),
@@ -298,10 +303,12 @@ function buildExecutiveSummary({ p, c, a, agents }) {
 }
 
 async function listApprovals() {
+  await quarantineBadProspects();
   const result = await db.query(`
     SELECT a.*, ag.name AS requested_by_agent_name
     FROM growth_approvals a
     LEFT JOIN growth_agents ag ON ag.key = a.requested_by_agent_key
+    WHERE a.status <> 'rejected'
     ORDER BY CASE a.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, a.created_at DESC
     LIMIT 100
   `);
@@ -309,9 +316,10 @@ async function listApprovals() {
 }
 
 async function listCampaigns() {
+  await quarantineBadProspects();
   const result = await db.query(`
     SELECT c.*,
-      COUNT(r.id)::int AS recipient_count,
+    COUNT(r.id)::int AS recipient_count,
       COUNT(r.id) FILTER (WHERE r.status='sent')::int AS sent_count,
       COUNT(r.id) FILTER (WHERE r.status='failed')::int AS failed_count,
       COALESCE(
@@ -330,7 +338,8 @@ async function listCampaigns() {
         '[]'::json
       ) AS recipient_drafts
     FROM growth_campaigns c
-    LEFT JOIN growth_campaign_recipients r ON r.campaign_id = c.id
+    LEFT JOIN growth_campaign_recipients r ON r.campaign_id = c.id AND r.status <> 'do_not_send'
+    WHERE c.status <> 'rejected'
     GROUP BY c.id
     ORDER BY c.created_at DESC
     LIMIT 100
@@ -339,8 +348,11 @@ async function listCampaigns() {
 }
 
 async function listProspects() {
+  await quarantineBadProspects();
   const result = await db.query(`
     SELECT * FROM growth_prospects
+    WHERE status NOT IN ('not_fit','do_not_contact')
+      AND COALESCE(approval_status,'not_requested') <> 'rejected'
     ORDER BY priority_score DESC, created_at DESC
     LIMIT 250
   `);
