@@ -13,6 +13,8 @@ function centsToDollars(cents) {
 }
 
 async function getSummary() {
+  await ensureStarterGrowthData();
+
   const [prospects, campaigns, approvals, agents, recentActivity] = await Promise.all([
     db.query(`
       SELECT
@@ -60,6 +62,204 @@ async function getSummary() {
     agents: agents.rows,
     recent_activity: recentActivity.rows,
   };
+}
+
+async function ensureStarterGrowthData() {
+  const [{ rows: prospectRows }, { rows: campaignRows }, { rows: approvalRows }] = await Promise.all([
+    db.query(`SELECT COUNT(*)::int AS count FROM growth_prospects`),
+    db.query(`SELECT COUNT(*)::int AS count FROM growth_campaigns`),
+    db.query(`SELECT COUNT(*)::int AS count FROM growth_approvals`),
+  ]);
+
+  const hasGrowthWork =
+    Number(prospectRows[0]?.count || 0) > 0 ||
+    Number(campaignRows[0]?.count || 0) > 0 ||
+    Number(approvalRows[0]?.count || 0) > 0;
+
+  if (hasGrowthWork) return;
+
+  const starterProspects = [
+    {
+      company: 'Village Green',
+      market: 'Detroit / Midwest',
+      buyer_type: 'Property management firm',
+      decision_maker: 'Facilities / Property Operations Lead',
+      title: 'Facilities or Property Operations',
+      website_url: 'https://villagegreen.com',
+      elevator_relevance: 'Large multifamily/property management operator; likely recurring elevator service contracts and modernization decisions across managed assets.',
+      priority_score: 92,
+      notes: 'Needs contact enrichment before live send. Good early ICP target for Michigan/Midwest property management.'
+    },
+    {
+      company: 'Friedman Real Estate',
+      market: 'Farmington Hills / Midwest',
+      buyer_type: 'Commercial real estate and property management',
+      decision_maker: 'Property Management / Facilities Decision Maker',
+      title: 'Property Management or Facilities',
+      website_url: 'https://www.friedmanrealestate.com',
+      elevator_relevance: 'Commercial property management portfolio; elevator contracts, service invoices, and modernization proposals are likely recurring issues.',
+      priority_score: 90,
+      notes: 'Needs contact enrichment and exact decision-maker confirmation before live send.'
+    },
+    {
+      company: 'McKinley Companies',
+      market: 'Ann Arbor / Michigan',
+      buyer_type: 'Real estate owner/operator',
+      decision_maker: 'Facilities / Asset Management Lead',
+      title: 'Facilities or Asset Management',
+      website_url: 'https://www.mckinley.com',
+      elevator_relevance: 'Michigan-based owner/operator with multifamily/commercial exposure; likely periodic elevator vendor decisions.',
+      priority_score: 88,
+      notes: 'Needs contact enrichment before live send.'
+    },
+    {
+      company: 'Beztak',
+      market: 'Farmington Hills / National',
+      buyer_type: 'Multifamily property owner/operator',
+      decision_maker: 'Operations / Facilities Lead',
+      title: 'Operations or Facilities',
+      website_url: 'https://www.beztak.com',
+      elevator_relevance: 'Large multifamily operator; elevator maintenance agreements and repair invoices may be frequent across portfolio.',
+      priority_score: 86,
+      notes: 'Needs contact enrichment before live send.'
+    },
+    {
+      company: 'Hayman Company',
+      market: 'Michigan / Midwest',
+      buyer_type: 'Property management firm',
+      decision_maker: 'Property Operations Lead',
+      title: 'Property Operations',
+      website_url: 'https://www.haymancompany.com',
+      elevator_relevance: 'Property management firm with managed real estate assets; good fit for bid, contract, and invoice review offer.',
+      priority_score: 84,
+      notes: 'Needs contact enrichment before live send.'
+    }
+  ];
+
+  const insertedProspects = [];
+  for (const prospect of starterProspects) {
+    const result = await db.query(`
+      INSERT INTO growth_prospects (
+        company, market, buyer_type, decision_maker, title, website_url,
+        elevator_relevance, priority_score, status, approval_status, notes, source
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'ready_for_approval','pending',$9,'starter_launch_seed')
+      RETURNING *
+    `, [
+      prospect.company,
+      prospect.market,
+      prospect.buyer_type,
+      prospect.decision_maker,
+      prospect.title,
+      prospect.website_url,
+      prospect.elevator_relevance,
+      prospect.priority_score,
+      prospect.notes,
+    ]);
+    insertedProspects.push(result.rows[0]);
+  }
+
+  const campaignBody = `Hi {{first_name}},
+
+ElevatorIQ helps property managers and facility teams review elevator invoices, maintenance contracts, and modernization bids before they overpay or sign something unclear.
+
+You can upload one elevator invoice, contract, or proposal and get a free preview first. If the preview is useful, the full plain-English report is $99.
+
+Would it make sense to send one recent elevator document through for a quick review preview?
+
+Thanks,
+The ElevatorIQ Team
+https://elevatoriq.ai`;
+
+  const campaign = await db.query(`
+    INSERT INTO growth_campaigns (
+      name, channel, objective, subject, body, cta, status, approval_status, owner_agent_key
+    ) VALUES (
+      'Michigan property manager first 5',
+      'email',
+      'Validate first direct-outreach message with Michigan/Midwest property management targets. Do not send until contacts are enriched and CEO approves.',
+      'Quick elevator invoice / bid review preview',
+      $1,
+      'Ask recipient to upload one elevator invoice, contract, or proposal for a free preview.',
+      'ready_for_approval',
+      'pending',
+      'outreach_agent'
+    ) RETURNING *
+  `, [campaignBody]);
+
+  for (const prospect of insertedProspects) {
+    await db.query(`
+      INSERT INTO growth_campaign_recipients (
+        campaign_id, prospect_id, company, personalized_opening, final_subject, final_body, status
+      ) VALUES ($1,$2,$3,$4,$5,$6,'ready_for_approval')
+    `, [
+      campaign.rows[0].id,
+      prospect.id,
+      prospect.company,
+      `${prospect.company} looks like a fit because ${prospect.elevator_relevance}`,
+      'Quick elevator invoice / bid review preview',
+      campaignBody,
+    ]);
+  }
+
+  await db.query(`
+    INSERT INTO growth_approvals (
+      item_type, item_id, title, summary, risk_level, requested_by_agent_key, action_type, action_payload
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+  `, [
+    'campaign',
+    campaign.rows[0].id,
+    'Approve Michigan first-5 outreach campaign for enrichment / queue',
+    `This queues the first Michigan/Midwest property manager campaign inside the dashboard. Safe mode means approval will not send emails yet. Before live sending, the Prospecting Agent still needs to enrich real decision-maker emails and Trey should approve the exact recipients.\n\nSubject: Quick elevator invoice / bid review preview\n\nBody:\n${campaignBody}`,
+    'medium',
+    'outreach_agent',
+    'queue_campaign',
+    JSON.stringify({ campaign_id: campaign.rows[0].id, safe_mode_note: 'Queue only until GROWTH_ACTIONS_ENABLED=true and recipient emails are enriched.' }),
+  ]);
+
+  await db.query(`
+    INSERT INTO growth_approvals (
+      item_type, title, summary, risk_level, requested_by_agent_key, action_type, action_payload
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7)
+  `, [
+    'other',
+    'Approve Prospecting Agent to enrich first 25 Michigan targets',
+    'Decision needed: approve the Prospecting Agent lane to build/enrich the first 25 Michigan/Midwest property-management targets with decision maker, verified email or contact path, ICP score, and custom opening line. This does not send anything externally; it fills the dashboard approval queue for CEO review.',
+    'low',
+    'prospecting_agent',
+    'none',
+    JSON.stringify({ requested_batch_size: 25, market: 'Michigan / Midwest', action: 'research_only' }),
+  ]);
+
+  await db.query(`
+    UPDATE growth_agents
+    SET status = CASE
+        WHEN key IN ('prospecting_agent','outreach_agent') THEN 'needs_review'
+        WHEN key = 'scoreboard_agent' THEN 'running'
+        ELSE status
+      END,
+      current_work = CASE
+        WHEN key = 'prospecting_agent' THEN 'Starter batch seeded. Awaiting CEO approval to enrich first 25 Michigan/Midwest targets.'
+        WHEN key = 'outreach_agent' THEN 'Starter campaign draft seeded. Awaiting CEO approval before queueing or live sending.'
+        WHEN key = 'scoreboard_agent' THEN 'Monitoring launch queue and summarizing CEO decisions needed.'
+        ELSE current_work
+      END,
+      last_output = CASE
+        WHEN key = 'prospecting_agent' THEN '5 starter prospects seeded; no emails verified yet.'
+        WHEN key = 'outreach_agent' THEN '1 starter email campaign drafted; safe-mode prevents external sends.'
+        WHEN key = 'scoreboard_agent' THEN 'Executive summary now has approval work to drive.'
+        ELSE last_output
+      END,
+      last_run_at = NOW(),
+      updated_at = NOW()
+  `);
+
+  await logActivity({
+    agentKey: 'scoreboard_agent',
+    eventType: 'starter_seed',
+    title: 'Starter growth command queue created',
+    detail: 'Seeded 5 starter prospects, 1 campaign draft, and 2 approval decisions. External sending remains disabled in safe mode.',
+    payload: { prospects: insertedProspects.length, campaign_id: campaign.rows[0].id },
+  });
 }
 
 function buildExecutiveSummary({ p, c, a, agents }) {
