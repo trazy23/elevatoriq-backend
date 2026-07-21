@@ -676,8 +676,11 @@ async function upsertResearchedProspect(prospect, defaultMarket) {
 
   const existing = await db.query(`
     SELECT id FROM growth_prospects
-    WHERE lower(company)=lower($1)
-       OR lower(regexp_replace(COALESCE(website_url,''), '^https?://(www\\.)?|/.*$', '', 'g'))=lower(regexp_replace($8, '^https?://(www\\.)?|/.*$', '', 'g'))
+    WHERE lower(company)=lower($1::text)
+       OR (
+         $8::text IS NOT NULL
+         AND lower(regexp_replace(COALESCE(website_url,''), '^https?://(www\\.)?|/.*$', '', 'g'))=lower(regexp_replace($8::text, '^https?://(www\\.)?|/.*$', '', 'g'))
+       )
     LIMIT 1
   `, values);
 
@@ -1197,8 +1200,7 @@ async function executeApprovalAction(approval) {
   if (approval.action_type === 'queue_campaign') {
     const campaignId = approval.item_type === 'campaign' ? approval.item_id : approval.action_payload?.campaign_id;
     if (!campaignId) return { status: 'failed', error: 'Missing campaign_id' };
-    await db.query(`UPDATE growth_campaigns SET status='queued', approval_status='approved', updated_at=NOW() WHERE id=$1`, [campaignId]);
-    return { status: 'executed', queued: true, message: 'Campaign queued.' };
+    return sendApprovedCampaign(campaignId);
   }
 
   if (approval.action_type === 'mark_prospect_approved') {
@@ -1209,6 +1211,109 @@ async function executeApprovalAction(approval) {
   }
 
   return { status: 'approved', queued: true, message: `Action type ${approval.action_type} is approved but not auto-executable yet.` };
+}
+
+async function sendApprovedCampaign(campaignId) {
+  if (!process.env.EMAIL_PROVIDER_API_KEY) {
+    return { status: 'failed', error: 'EMAIL_PROVIDER_API_KEY is not configured' };
+  }
+
+  const campaign = await db.query(`SELECT id, name FROM growth_campaigns WHERE id=$1`, [campaignId]);
+  if (!campaign.rows.length) return { status: 'failed', error: 'Campaign not found' };
+
+  await db.query(`UPDATE growth_campaigns SET status='running', approval_status='approved', updated_at=NOW() WHERE id=$1`, [campaignId]);
+
+  const recipients = await db.query(`
+    SELECT id, prospect_id, email, company, final_subject, final_body
+    FROM growth_campaign_recipients
+    WHERE campaign_id=$1
+      AND status IN ('ready_for_approval','approved','queued','failed')
+    ORDER BY created_at ASC
+  `, [campaignId]);
+
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+  const results = [];
+
+  for (const recipient of recipients.rows) {
+    if (!recipient.email || !recipient.final_subject || !recipient.final_body) {
+      skipped += 1;
+      // eslint-disable-next-line no-await-in-loop
+      await db.query(`
+        UPDATE growth_campaign_recipients
+        SET status='failed', error='Missing email, subject, or body; needs enrichment before sending.', updated_at=NOW()
+        WHERE id=$1
+      `, [recipient.id]);
+      results.push({ recipient_id: recipient.id, company: recipient.company, status: 'skipped', error: 'Missing email/subject/body' });
+      continue;
+    }
+
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await db.query(`UPDATE growth_campaign_recipients SET status='sending', error=NULL, updated_at=NOW() WHERE id=$1`, [recipient.id]);
+      // eslint-disable-next-line no-await-in-loop
+      const sendResult = await sendApprovedEmail({
+        to: recipient.email,
+        subject: recipient.final_subject,
+        text: recipient.final_body,
+      });
+
+      if (sendResult.status === 'executed') {
+        sent += 1;
+        // eslint-disable-next-line no-await-in-loop
+        await db.query(`
+          UPDATE growth_campaign_recipients
+          SET status='sent', provider_message_id=$2, sent_at=NOW(), error=NULL, updated_at=NOW()
+          WHERE id=$1
+        `, [recipient.id, sendResult.id]);
+        if (recipient.prospect_id) {
+          // eslint-disable-next-line no-await-in-loop
+          await db.query(`
+            UPDATE growth_prospects
+            SET status='sent', approval_status='approved', last_contacted_at=NOW(), next_follow_up_at=NOW() + INTERVAL '4 days', updated_at=NOW()
+            WHERE id=$1
+          `, [recipient.prospect_id]);
+        }
+      } else {
+        failed += 1;
+        // eslint-disable-next-line no-await-in-loop
+        await db.query(`
+          UPDATE growth_campaign_recipients
+          SET status='failed', error=$2, updated_at=NOW()
+          WHERE id=$1
+        `, [recipient.id, sendResult.error || sendResult.message || 'Send failed']);
+      }
+      results.push({ recipient_id: recipient.id, company: recipient.company, email: recipient.email, ...sendResult });
+    } catch (err) {
+      failed += 1;
+      // eslint-disable-next-line no-await-in-loop
+      await db.query(`UPDATE growth_campaign_recipients SET status='failed', error=$2, updated_at=NOW() WHERE id=$1`, [recipient.id, err.message]);
+      results.push({ recipient_id: recipient.id, company: recipient.company, email: recipient.email, status: 'failed', error: err.message });
+    }
+  }
+
+  const finalStatus = sent > 0 && failed === 0 && skipped === 0 ? 'sent' : 'paused';
+  await db.query(`UPDATE growth_campaigns SET status=$2, updated_at=NOW() WHERE id=$1`, [campaignId, finalStatus]);
+
+  await logActivity({
+    agentKey: 'outreach_agent',
+    eventType: 'campaign_send',
+    title: `${campaign.rows[0].name} send completed`,
+    detail: `Sent ${sent}, skipped ${skipped}, failed ${failed}.`,
+    payload: { campaign_id: campaignId, sent, skipped, failed, results },
+  });
+
+  return {
+    status: sent > 0 && failed === 0 ? 'executed' : (sent > 0 ? 'executed' : 'failed'),
+    provider: 'resend',
+    campaign_id: campaignId,
+    sent,
+    skipped,
+    failed,
+    message: `Campaign processed. Sent ${sent}, skipped ${skipped}, failed ${failed}.`,
+    results,
+  };
 }
 
 async function sendApprovedEmail(payload) {
