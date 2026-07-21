@@ -398,57 +398,464 @@ async function createApprovalIfMissing({ itemType = 'other', itemId = null, titl
   return { id: result.rows[0].id, created: true };
 }
 
-async function runProspectingAgent(options = {}) {
-  const market = options.market || 'Michigan / Midwest';
-  const targets = [
-    ['KMG Prestige', 'Michigan / Midwest', 'Property management firm', 'Property Operations / Facilities Lead', 'https://kmgprestige.com', 87],
-    ['ROCO Real Estate', 'Michigan / National', 'Multifamily owner/operator', 'Asset Management / Operations Lead', 'https://rocorealestate.com', 85],
-    ['Oxford Companies', 'Ann Arbor / Michigan', 'Commercial real estate operator', 'Property Management / Facilities Lead', 'https://oxfordcompanies.com', 82],
-    ['REDICO', 'Southfield / Midwest', 'Commercial real estate owner/operator', 'Property Operations Lead', 'https://www.redico.com', 81],
-    ['The Farbman Group', 'Southfield / Midwest', 'Commercial real estate/property management', 'Property Management Lead', 'https://www.farbman.com', 80],
-    ['Kirco', 'Troy / Michigan', 'Commercial real estate developer/operator', 'Facilities / Property Operations Lead', 'https://www.kirco.com', 78],
-    ['Agree Realty', 'Royal Oak / National', 'Retail real estate owner/operator', 'Asset Management / Property Operations Lead', 'https://www.agreerealty.com', 77],
-    ['Essential Property Management', 'Michigan', 'Property management firm', 'Property Management Lead', 'https://www.essentialpropertymanagement.com', 74],
-  ];
-
-  let inserted = 0;
-  for (const [company, targetMarket, buyerType, decisionMaker, website, score] of targets) {
-    const result = await db.query(`
-      INSERT INTO growth_prospects (
-        company, market, buyer_type, decision_maker, title, website_url, elevator_relevance,
-        priority_score, status, approval_status, notes, source
-      )
-      SELECT $1,$2,$3,$4,$4,$5,$6,$7,'researched','not_requested',$8,'agent_control_prospecting'
-      WHERE NOT EXISTS (SELECT 1 FROM growth_prospects WHERE lower(company)=lower($1))
-      RETURNING id
-    `, [
-      company,
-      targetMarket,
-      buyerType,
-      decisionMaker,
-      website,
-      `${company} fits the ${market} property/facility ICP and likely has elevator invoices, contracts, service proposals, or modernization decisions to review.`,
-      score,
-      'Agent-added target. Needs human-safe contact enrichment before any external send.',
-    ]);
-    inserted += result.rowCount;
+async function researchAndEnrichProspects({ market, batchSize }) {
+  const queries = buildProspectingQueries(market);
+  const rawResults = [];
+  for (const query of queries) {
+    try {
+      const results = await searchProspectWeb(query);
+      rawResults.push(...results.map((result) => ({ ...result, query })));
+    } catch (err) {
+      rawResults.push({ query, error: err.message });
+    }
+    if (rawResults.filter((result) => result.url).length >= batchSize * 2) break;
   }
 
+  let candidates = dedupeProspectCandidates(rawResults).slice(0, batchSize);
+  let source = process.env.BRAVE_SEARCH_API_KEY ? 'brave_search_api' : 'duckduckgo_html_search';
+  if (!candidates.length) {
+    const directoryResults = await directoryProspectSearch(market);
+    rawResults.push(...directoryResults.map((result) => ({ ...result, query: 'property-management-directory-fallback' })));
+    candidates = dedupeProspectCandidates(rawResults).slice(0, batchSize);
+    if (candidates.length) source = `${source}+property_management_directory`;
+  }
+  const enriched = [];
+  for (const candidate of candidates) {
+    // Keep this bounded because the button is a live admin request, not a long background job.
+    // eslint-disable-next-line no-await-in-loop
+    enriched.push(await enrichProspectCandidate(candidate, market));
+  }
+
+  return {
+    source,
+    queries,
+    prospects: enriched.filter((prospect) => prospect.company && prospect.website_url),
+    raw_result_count: rawResults.length,
+  };
+}
+
+function buildProspectingQueries(market) {
+  const region = String(market || 'Michigan Midwest').replace(/\s*\/\s*/g, ' ');
+  return [
+    `${region} property management company facilities director elevator`,
+    `${region} commercial property management firm building operations`,
+    `${region} multifamily property management company maintenance director`,
+    `${region} condo association management company elevator maintenance`,
+    `${region} real estate owner operator facilities property management`,
+  ];
+}
+
+async function searchProspectWeb(query) {
+  if (process.env.BRAVE_SEARCH_API_KEY) return braveSearch(query);
+  return duckDuckGoSearch(query);
+}
+
+async function directoryProspectSearch(market) {
+  const urls = [
+    'https://www.propertymanagement.com/companies-in-detroit-mi/',
+    'https://www.propertymanagement.com/companies-in-ann-arbor-mi/',
+    'https://www.propertymanagement.com/companies-in-grand-rapids-mi/',
+  ];
+  const results = [];
+  for (const url of urls) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const response = await fetchWithTimeout(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 ElevatorIQGrowthResearch/1.0', Accept: 'text/html,application/xhtml+xml' },
+      }, 9000);
+      if (!response.ok) continue;
+      // eslint-disable-next-line no-await-in-loop
+      const html = await response.text();
+      results.push(...extractPropertyManagementDirectoryResults(html, url, market));
+    } catch (_err) {
+      // Directory fallback is best-effort.
+    }
+    if (results.length >= 30) break;
+  }
+  return results;
+}
+
+function extractPropertyManagementDirectoryResults(html, sourceUrl, market) {
+  const results = [];
+  const seen = new Set();
+  const jsonNameRegex = /"name"\s*:\s*"([^"]{3,120})"[\s\S]{0,900}?"description"\s*:\s*"([^"]{3,240})"[\s\S]{0,1200}?"urlTemplate"\s*:\s*"([^"]+)"/gi;
+  let match;
+  while ((match = jsonNameRegex.exec(html)) !== null && results.length < 40) {
+    const company = stripHtml(match[1]).replace(/\\u0026/g, '&');
+    const description = stripHtml(match[2]).replace(/\\u0026/g, '&');
+    const profileUrl = match[3].replace(/\\\//g, '/');
+    if (!company || seen.has(company.toLowerCase())) continue;
+    seen.add(company.toLowerCase());
+    results.push({
+      title: company,
+      url: profileUrl,
+      snippet: `${description}. Directory source for ${market}.`,
+    });
+  }
+
+  const headingRegex = /<h[23][^>]*>([\s\S]*?)<\/h[23]>/gi;
+  while ((match = headingRegex.exec(html)) !== null && results.length < 40) {
+    const company = stripHtml(match[1]);
+    if (!company || company.length < 3 || seen.has(company.toLowerCase())) continue;
+    if (/property management|apartments|real estate|management|properties/i.test(company)) {
+      seen.add(company.toLowerCase());
+      results.push({
+        title: company,
+        url: sourceUrl,
+        snippet: `${company} appears in a Michigan property-management directory. Needs official-site/contact verification before live sending.`,
+      });
+    }
+  }
+  return results;
+}
+
+async function braveSearch(query) {
+  const response = await fetchWithTimeout(`https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=10`, {
+    headers: {
+      Accept: 'application/json',
+      'X-Subscription-Token': process.env.BRAVE_SEARCH_API_KEY,
+    },
+  }, 8000);
+  if (!response.ok) throw new Error(`Brave search failed: ${response.status}`);
+  const body = await response.json();
+  return (body.web?.results || []).map((item) => ({
+    title: stripHtml(item.title || ''),
+    url: item.url,
+    snippet: stripHtml(item.description || ''),
+  }));
+}
+
+async function duckDuckGoSearch(query) {
+  const url = `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  const response = await fetchWithTimeout(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 ElevatorIQGrowthResearch/1.0',
+      Accept: 'text/html,application/xhtml+xml',
+    },
+  }, 9000);
+  if (!response.ok) throw new Error(`DuckDuckGo search failed: ${response.status}`);
+  const html = await response.text();
+  const results = [];
+  const blockRegex = /<div class="result[\s\S]*?<\/div>\s*<\/div>/gi;
+  const blocks = html.match(blockRegex) || [];
+  for (const block of blocks) {
+    const linkMatch = block.match(/<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+    if (!linkMatch) continue;
+    const snippetMatch = block.match(/<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/i)
+      || block.match(/<div[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/div>/i);
+    results.push({
+      title: stripHtml(linkMatch[2]),
+      url: normalizeSearchUrl(linkMatch[1]),
+      snippet: stripHtml(snippetMatch?.[1] || ''),
+    });
+  }
+  return results;
+}
+
+function dedupeProspectCandidates(rawResults) {
+  const blockedHosts = ['google.com', 'bing.com', 'yahoo.com', 'facebook.com', 'linkedin.com', 'instagram.com', 'x.com', 'twitter.com', 'youtube.com', 'yelp.com', 'apartments.com', 'wikipedia.org', 'bloomberg.com', 'zoominfo.com', 'dnb.com', 'rocketreach.co'];
+  const seen = new Set();
+  const candidates = [];
+  for (const result of rawResults) {
+    if (!result.url) continue;
+    const url = safeUrl(result.url);
+    if (!url) continue;
+    const host = url.hostname.replace(/^www\./, '').toLowerCase();
+    const dedupeKey = host === 'propertymanagement.com' ? `${host}${url.pathname.toLowerCase() || result.title?.toLowerCase()}` : host;
+    if (blockedHosts.some((blocked) => host === blocked || host.endsWith(`.${blocked}`))) continue;
+    if (seen.has(dedupeKey)) continue;
+    const combined = `${result.title || ''} ${result.snippet || ''} ${host}`.toLowerCase();
+    const isLikelyFit = /(property management|real estate|apartments|multifamily|commercial propert|facility|facilities|condo|hoa|building operations|asset management)/.test(combined);
+    if (!isLikelyFit) continue;
+    seen.add(dedupeKey);
+    candidates.push({
+      company: inferCompanyName(result.title, host),
+      website_url: host === 'propertymanagement.com' ? url.href : `${url.protocol}//${url.host}`,
+      title: result.title,
+      snippet: result.snippet,
+      source_url: result.url,
+      host,
+    });
+  }
+  return candidates;
+}
+
+async function enrichProspectCandidate(candidate, market) {
+  const pages = await fetchCandidatePages(candidate.website_url);
+  const text = pages.map((page) => `${page.url}\n${page.text}`).join('\n\n').slice(0, 12000);
+  const email = extractBestEmail(text, candidate.host);
+  const linkedinUrl = extractLinkedinUrl(pages.map((page) => page.html).join('\n'));
+  const decisionMaker = extractDecisionMaker(text) || 'Property Operations / Facilities Lead';
+  const buyerType = inferBuyerType(`${candidate.title} ${candidate.snippet} ${text}`);
+  const relevance = buildElevatorRelevance(candidate, buyerType, text, market);
+  const score = scoreProspect(candidate, buyerType, text, email);
+  const notes = [
+    `Live web research source: ${candidate.source_url}`,
+    email ? `Public contact email found: ${email}` : 'No public decision-maker email verified; use contact form or enrich manually before live sending.',
+    linkedinUrl ? `LinkedIn/company profile found: ${linkedinUrl}` : 'No LinkedIn URL found on fetched pages.',
+    `Evidence: ${compactWhitespace(candidate.snippet || candidate.title || '').slice(0, 260)}`,
+  ].join('\n');
+
+  return {
+    company: candidate.company,
+    market: inferMarket(`${candidate.title} ${candidate.snippet} ${text}`, market),
+    buyer_type: buyerType,
+    decision_maker: decisionMaker,
+    title: decisionMaker,
+    email,
+    linkedin_url: linkedinUrl,
+    website_url: candidate.website_url,
+    elevator_relevance: relevance,
+    priority_score: score,
+    notes,
+    source: 'live_web_research',
+  };
+}
+
+async function fetchCandidatePages(baseUrl) {
+  const urls = [baseUrl, `${baseUrl.replace(/\/$/, '')}/contact`, `${baseUrl.replace(/\/$/, '')}/about`, `${baseUrl.replace(/\/$/, '')}/team`];
+  const pages = [];
+  for (const url of urls) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const response = await fetchWithTimeout(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 ElevatorIQGrowthResearch/1.0', Accept: 'text/html,application/xhtml+xml' },
+      }, 5000);
+      if (!response.ok || !String(response.headers.get('content-type') || '').includes('text/html')) continue;
+      // eslint-disable-next-line no-await-in-loop
+      const html = await response.text();
+      pages.push({ url, html, text: stripHtml(html).slice(0, 6000) });
+    } catch (_err) {
+      // Some sites block crawlers; keep the rest of the enrichment rather than failing the run.
+    }
+    if (pages.length >= 2) break;
+  }
+  return pages;
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function upsertResearchedProspect(prospect, defaultMarket) {
+  const values = [
+    prospect.company,
+    prospect.market || defaultMarket,
+    prospect.buyer_type,
+    prospect.decision_maker,
+    prospect.title,
+    prospect.email,
+    prospect.linkedin_url,
+    prospect.website_url,
+    prospect.elevator_relevance,
+    prospect.priority_score,
+    prospect.notes,
+    prospect.source,
+  ];
+
+  const existing = await db.query(`
+    SELECT id FROM growth_prospects
+    WHERE lower(company)=lower($1)
+       OR lower(regexp_replace(COALESCE(website_url,''), '^https?://(www\\.)?|/.*$', '', 'g'))=lower(regexp_replace($8, '^https?://(www\\.)?|/.*$', '', 'g'))
+    LIMIT 1
+  `, values);
+
+  if (!existing.rows.length) {
+    const insert = await db.query(`
+      INSERT INTO growth_prospects (
+        company, market, buyer_type, decision_maker, title, email, linkedin_url, website_url,
+        elevator_relevance, priority_score, status, approval_status, notes, source, updated_at
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'researched','not_requested',$11,$12,NOW())
+      RETURNING id
+    `, values);
+    return { inserted: insert.rowCount > 0, updated: false };
+  }
+
+  const update = await db.query(`
+    UPDATE growth_prospects
+    SET market=COALESCE($2, market),
+        buyer_type=COALESCE($3, buyer_type),
+        decision_maker=COALESCE($4, decision_maker),
+        title=COALESCE($5, title),
+        email=COALESCE($6, email),
+        linkedin_url=COALESCE($7, linkedin_url),
+        website_url=COALESCE($8, website_url),
+        elevator_relevance=COALESCE($9, elevator_relevance),
+        priority_score=GREATEST(COALESCE(priority_score,0), $10),
+        notes=concat_ws('\n\n', NULLIF(notes,''), $11),
+        source=$12,
+        updated_at=NOW()
+    WHERE id=$13
+    RETURNING id
+  `, [...values, existing.rows[0].id]);
+  return { inserted: false, updated: update.rowCount > 0 };
+}
+
+function buildProspectingApprovalSummary({ market, research, inserted, updated }) {
+  const lines = research.prospects.slice(0, 12).map((prospect, index) => (
+    `${index + 1}. ${prospect.company} — ${prospect.buyer_type}; score ${prospect.priority_score}; ${prospect.email ? `email/contact: ${prospect.email}` : 'no verified email yet'}; ${prospect.website_url}`
+  ));
+  return `Prospecting Agent ran live web research for ${market}.\n\nResult: ${research.prospects.length} enriched candidates, ${inserted} new, ${updated} refreshed.\n\nWhat changed: this is no longer the old static starter list. The agent searched the web, filtered for property/facility ICP fit, visited company pages where possible, extracted public contact paths, scored relevance, and saved evidence notes.\n\nCandidates:\n${lines.join('\n') || 'No qualified candidates found from live search.'}\n\nSearch queries used:\n${research.queries.map((query) => `- ${query}`).join('\n')}\n\nSafety: this only researched and saved prospects. It did not send emails, post publicly, or enable outbound actions.`;
+}
+
+function normalizeSearchUrl(rawUrl) {
+  const decoded = rawUrl.replace(/&amp;/g, '&');
+  try {
+    const parsed = new URL(decoded, 'https://duckduckgo.com');
+    const uddg = parsed.searchParams.get('uddg');
+    return uddg ? decodeURIComponent(uddg) : parsed.href;
+  } catch (_err) {
+    return decoded;
+  }
+}
+
+function safeUrl(rawUrl) {
+  try {
+    const url = new URL(normalizeSearchUrl(rawUrl));
+    if (!['http:', 'https:'].includes(url.protocol)) return null;
+    return url;
+  } catch (_err) {
+    return null;
+  }
+}
+
+function inferCompanyName(title, host) {
+  const cleanedTitle = stripHtml(title || '')
+    .split(/\s[|–—-]\s/)[0]
+    .replace(/\b(home|official site|property management|real estate|apartments|commercial real estate)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (cleanedTitle && cleanedTitle.length >= 3 && cleanedTitle.length <= 80) return cleanedTitle;
+  return host.replace(/^www\./, '').split('.')[0].replace(/[-_]/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function inferBuyerType(text) {
+  const lower = String(text || '').toLowerCase();
+  if (/multifamily|apartment|residential communit/.test(lower)) return 'Multifamily property owner/operator';
+  if (/commercial real estate|office|retail|industrial/.test(lower)) return 'Commercial real estate/property management';
+  if (/condo|hoa|association/.test(lower)) return 'Condo / HOA property management';
+  if (/facility|facilities|building operations/.test(lower)) return 'Facilities / building operations';
+  return 'Property management firm';
+}
+
+function inferMarket(text, fallback) {
+  const lower = String(text || '').toLowerCase();
+  if (/detroit|southfield|farmington|royal oak|troy|ann arbor|michigan/.test(lower)) return 'Michigan / Midwest';
+  if (/ohio|cleveland|columbus|toledo|cincinnati/.test(lower)) return 'Ohio / Midwest';
+  if (/indiana|indianapolis|fort wayne/.test(lower)) return 'Indiana / Midwest';
+  if (/illinois|chicago/.test(lower)) return 'Illinois / Midwest';
+  return fallback;
+}
+
+function extractBestEmail(text, host) {
+  const matches = Array.from(new Set(String(text || '').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || []));
+  const filtered = matches.filter((email) => !/example|privacy|sentry|wixpress|wordpress|schema|domain/.test(email.toLowerCase()));
+  const sameDomain = filtered.find((email) => host && email.toLowerCase().includes(host.replace(/^www\./, '').split('.')[0].toLowerCase()));
+  return sameDomain || filtered.find((email) => /info|contact|leasing|management|office|hello|admin/i.test(email)) || filtered[0] || null;
+}
+
+function extractLinkedinUrl(html) {
+  const match = String(html || '').match(/https?:\/\/(?:www\.)?linkedin\.com\/(?:company|in)\/[^"'\s<>]+/i);
+  return match ? match[0].replace(/[),.;]+$/, '') : null;
+}
+
+function extractDecisionMaker(text) {
+  const titles = [
+    'Director of Facilities',
+    'Facilities Director',
+    'Director of Property Management',
+    'Property Manager',
+    'Regional Property Manager',
+    'Director of Operations',
+    'Asset Manager',
+    'Building Operations Manager',
+    'Maintenance Director',
+  ];
+  const lower = String(text || '').toLowerCase();
+  return titles.find((title) => lower.includes(title.toLowerCase())) || null;
+}
+
+function buildElevatorRelevance(candidate, buyerType, text, market) {
+  const lower = String(text || '').toLowerCase();
+  const portfolioHint = /portfolio|properties|communities|apartments|commercial|managed/.test(lower)
+    ? 'public pages indicate a managed property portfolio'
+    : 'search result indicates property/facility management fit';
+  return `${candidate.company} fits the ${market} ElevatorIQ ICP as a ${buyerType}; ${portfolioHint}. Likely use case: reviewing elevator invoices, maintenance contracts, repair proposals, or modernization bids before approval.`;
+}
+
+function scoreProspect(candidate, buyerType, text, email) {
+  const lower = `${candidate.title || ''} ${candidate.snippet || ''} ${text || ''}`.toLowerCase();
+  let score = 62;
+  if (/property management|commercial real estate|multifamily|apartments/.test(lower)) score += 12;
+  if (/portfolio|properties|communities|managed/.test(lower)) score += 8;
+  if (/facility|facilities|maintenance|operations|asset management/.test(lower)) score += 6;
+  if (/michigan|detroit|ann arbor|southfield|farmington|troy|midwest/.test(lower)) score += 5;
+  if (email) score += 4;
+  if (/Condo|HOA/i.test(buyerType)) score -= 3;
+  return Math.max(40, Math.min(95, score));
+}
+
+function stripHtml(value = '') {
+  return compactWhitespace(String(value)
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&#x27;|&#39;/g, "'")
+    .replace(/&quot;/g, '"'));
+}
+
+function compactWhitespace(value = '') {
+  return String(value).replace(/\s+/g, ' ').trim();
+}
+
+async function runProspectingAgent(options = {}) {
+  const market = options.market || 'Michigan / Midwest';
+  const batchSize = Math.min(Number(options.batch_size || options.batchSize || 12), 25);
+  const research = await researchAndEnrichProspects({ market, batchSize });
+
+  let inserted = 0;
+  let updated = 0;
+  for (const prospect of research.prospects) {
+    const result = await upsertResearchedProspect(prospect, market);
+    if (result.inserted) inserted += 1;
+    else if (result.updated) updated += 1;
+  }
+
+  const approvalSummary = buildProspectingApprovalSummary({ market, research, inserted, updated });
   const approval = await createApprovalIfMissing({
-    title: 'Approve Prospecting Agent to prepare next Michigan target batch',
-    summary: `Prospecting Agent added ${inserted} new Michigan/Midwest property-management targets if they were not already present. Next approval lets the agent mark the highest-priority targets ready for contact enrichment and outreach drafting. No external sends occur from this action.`,
+    title: `Review Prospecting Agent live research batch — ${new Date().toISOString().slice(0, 10)}`,
+    summary: approvalSummary,
     riskLevel: 'low',
     agentKey: 'prospecting_agent',
     actionType: 'none',
-    actionPayload: { market, inserted },
+    actionPayload: {
+      market,
+      inserted,
+      updated,
+      researched: research.prospects.length,
+      search_queries: research.queries,
+      source: research.source,
+    },
   });
 
   return {
     created: inserted,
+    updated,
+    researched: research.prospects.length,
     needs_review: true,
-    current_work: 'New prospects added/reviewed. Awaiting CEO approval before outreach drafting.',
-    message: `Added ${inserted} new prospect${inserted === 1 ? '' : 's'} and created/kept 1 CEO approval item.`,
+    current_work: 'Live web research/enrichment completed. Awaiting CEO review before outreach drafting.',
+    message: `Researched ${research.prospects.length} web-derived prospect${research.prospects.length === 1 ? '' : 's'}; added ${inserted}, refreshed ${updated}.`,
     approval_id: approval.id,
+    source: research.source,
   };
 }
 
