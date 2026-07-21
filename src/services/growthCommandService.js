@@ -444,7 +444,7 @@ async function researchAndEnrichProspects({ market, batchSize }) {
   return {
     source,
     queries,
-    prospects: enriched.filter((prospect) => prospect.company && prospect.website_url),
+    prospects: enriched.filter((prospect) => prospect.company && prospect.website_url && !isBadProspectRecord(prospect)),
     raw_result_count: rawResults.length,
   };
 }
@@ -452,11 +452,11 @@ async function researchAndEnrichProspects({ market, batchSize }) {
 function buildProspectingQueries(market) {
   const region = String(market || 'Michigan Midwest').replace(/\s*\/\s*/g, ' ');
   return [
-    `${region} property management company facilities director elevator`,
-    `${region} commercial property management firm building operations`,
-    `${region} multifamily property management company maintenance director`,
+    `${region} property management company elevator maintenance contract`,
+    `${region} commercial property management firm elevator service contract`,
+    `${region} multifamily property management company elevator invoice`,
     `${region} condo association management company elevator maintenance`,
-    `${region} real estate owner operator facilities property management`,
+    `${region} real estate owner operator property management elevators`,
   ];
 }
 
@@ -568,7 +568,6 @@ async function duckDuckGoSearch(query) {
 }
 
 function dedupeProspectCandidates(rawResults) {
-  const blockedHosts = ['google.com', 'bing.com', 'yahoo.com', 'facebook.com', 'linkedin.com', 'instagram.com', 'x.com', 'twitter.com', 'youtube.com', 'yelp.com', 'apartments.com', 'wikipedia.org', 'bloomberg.com', 'zoominfo.com', 'dnb.com', 'rocketreach.co'];
   const seen = new Set();
   const candidates = [];
   for (const result of rawResults) {
@@ -577,9 +576,10 @@ function dedupeProspectCandidates(rawResults) {
     if (!url) continue;
     const host = url.hostname.replace(/^www\./, '').toLowerCase();
     const dedupeKey = host === 'propertymanagement.com' ? `${host}${url.pathname.toLowerCase() || result.title?.toLowerCase()}` : host;
-    if (blockedHosts.some((blocked) => host === blocked || host.endsWith(`.${blocked}`))) continue;
+    if (isBlockedProspectHost(host)) continue;
     if (seen.has(dedupeKey)) continue;
     const combined = `${result.title || ''} ${result.snippet || ''} ${host}`.toLowerCase();
+    if (isJobListingLikeResult(result, host)) continue;
     const isLikelyFit = /(property management|real estate|apartments|multifamily|commercial propert|facility|facilities|condo|hoa|building operations|asset management)/.test(combined);
     if (!isLikelyFit) continue;
     seen.add(dedupeKey);
@@ -593,6 +593,96 @@ function dedupeProspectCandidates(rawResults) {
     });
   }
   return candidates;
+}
+
+function isBlockedProspectHost(host = '') {
+  const blockedHosts = [
+    'google.com', 'bing.com', 'yahoo.com', 'facebook.com', 'linkedin.com', 'instagram.com', 'x.com', 'twitter.com',
+    'youtube.com', 'yelp.com', 'apartments.com', 'wikipedia.org', 'bloomberg.com', 'zoominfo.com', 'dnb.com', 'rocketreach.co',
+    'indeed.com', 'simplyhired.com', 'glassdoor.com', 'ziprecruiter.com', 'monster.com', 'careerbuilder.com', 'zippia.com',
+    'jooble.org', 'talent.com', 'salary.com', 'builtin.com', 'lensa.com', 'snagajob.com', 'jobcase.com', 'workable.com',
+    'greenhouse.io', 'lever.co', 'applicantpro.com', 'paylocity.com', 'bamboohr.com', 'icims.com', 'adp.com', 'workdayjobs.com',
+  ];
+  return blockedHosts.some((blocked) => host === blocked || host.endsWith(`.${blocked}`));
+}
+
+function isJobListingLikeResult(result = {}, host = '') {
+  const combined = `${result.title || ''} ${result.snippet || ''} ${result.url || ''} ${host}`.toLowerCase();
+  if (isBlockedProspectHost(host)) return true;
+  return /\b(jobs?|careers?|hiring|employment|salary|resume|apply now|job listings?|open positions?|director of facilities jobs?|facilities director jobs?)\b/.test(combined);
+}
+
+function isBadProspectRecord(prospect = {}) {
+  const website = safeUrl(prospect.website_url || prospect.source_url || '');
+  const host = website ? website.hostname.replace(/^www\./, '').toLowerCase() : '';
+  const combined = `${prospect.company || ''} ${prospect.buyer_type || ''} ${prospect.decision_maker || ''} ${prospect.title || ''} ${prospect.elevator_relevance || ''} ${prospect.notes || ''} ${prospect.source || ''} ${prospect.website_url || ''}`.toLowerCase();
+  if (host && isBlockedProspectHost(host)) return true;
+  return /\b(indeed|simplyhired|glassdoor|ziprecruiter|monster|careerbuilder|job listings?|jobs in|employment in|hiring site|facilities director jobs?|director facilities management jobs?)\b/.test(combined);
+}
+
+async function quarantineBadProspects() {
+  const badPattern = '(indeed|simplyhired|glassdoor|ziprecruiter|monster|careerbuilder|zippia|jooble|talent\\.com|salary\\.com|builtin|applicantpro|greenhouse|lever\\.co|workdayjobs|job listings?|jobs in|employment in|hiring site|facilities director jobs?|director facilities management jobs?)';
+  const badProspects = await db.query(`
+    SELECT id FROM growth_prospects
+    WHERE status NOT IN ('do_not_contact','not_fit')
+      AND (
+        company ~* $1
+        OR COALESCE(website_url,'') ~* $1
+        OR COALESCE(notes,'') ~* $1
+        OR COALESCE(elevator_relevance,'') ~* $1
+      )
+  `, [badPattern]);
+
+  const ids = badProspects.rows.map((row) => row.id);
+  if (!ids.length) return { prospects: 0, recipients: 0, campaigns: 0, approvals: 0 };
+
+  const prospects = await db.query(`
+    UPDATE growth_prospects
+    SET status='not_fit',
+        approval_status='rejected',
+        notes=concat_ws('\n\n', NULLIF(notes,''), 'Quarantined by prospecting quality guard: job board / employment listing / non-ICP source.'),
+        updated_at=NOW()
+    WHERE id = ANY($1::uuid[])
+    RETURNING id
+  `, [ids]);
+
+  const recipients = await db.query(`
+    UPDATE growth_campaign_recipients
+    SET status='do_not_send', updated_at=NOW()
+    WHERE prospect_id = ANY($1::uuid[])
+      AND status IN ('draft','ready_for_approval','approved','queued','sending')
+    RETURNING campaign_id
+  `, [ids]);
+
+  const campaignIds = Array.from(new Set(recipients.rows.map((row) => row.campaign_id).filter(Boolean)));
+  let campaigns = { rowCount: 0 };
+  let approvals = { rowCount: 0 };
+  if (campaignIds.length) {
+    campaigns = await db.query(`
+      UPDATE growth_campaigns
+      SET status='rejected', approval_status='rejected', updated_at=NOW()
+      WHERE id = ANY($1::uuid[])
+        AND status IN ('draft','ready_for_approval','approved','queued','running')
+    `, [campaignIds]);
+
+    approvals = await db.query(`
+      UPDATE growth_approvals
+      SET status='rejected', decided_at=NOW(), decision_notes='Auto-rejected: campaign contained job board / employment listing prospects.'
+      WHERE item_type='campaign'
+        AND item_id = ANY($1::uuid[])
+        AND status='pending'
+    `, [campaignIds]);
+  }
+
+  await logActivity({
+    agentKey: 'prospecting_agent',
+    eventType: 'quality_guard',
+    title: 'Quarantined non-ICP/job-board prospects',
+    detail: `Quarantined ${prospects.rowCount} prospect(s), ${recipients.rowCount} recipient draft(s), ${campaigns.rowCount} campaign(s), and ${approvals.rowCount} approval(s).`,
+    payload: { prospect_ids: ids, campaign_ids: campaignIds },
+  });
+
+  return { prospects: prospects.rowCount, recipients: recipients.rowCount, campaigns: campaigns.rowCount, approvals: approvals.rowCount };
 }
 
 async function enrichProspectCandidate(candidate, market) {
@@ -838,6 +928,7 @@ function compactWhitespace(value = '') {
 async function runProspectingAgent(options = {}) {
   const market = options.market || 'Michigan / Midwest';
   const batchSize = Math.min(Number(options.batch_size || options.batchSize || 12), 25);
+  const quarantined = await quarantineBadProspects();
   const research = await researchAndEnrichProspects({ market, batchSize });
 
   let inserted = 0;
@@ -874,14 +965,19 @@ async function runProspectingAgent(options = {}) {
     message: `Researched ${research.prospects.length} web-derived prospect${research.prospects.length === 1 ? '' : 's'}; added ${inserted}, refreshed ${updated}.`,
     approval_id: approval.id,
     source: research.source,
+    quarantined,
   };
 }
 
 async function runOutreachAgent() {
+  await quarantineBadProspects();
   const prospects = await db.query(`
     SELECT * FROM growth_prospects
     WHERE status IN ('researched','ready_for_approval','approved')
       AND COALESCE(approval_status,'not_requested') <> 'rejected'
+      AND company !~* '(indeed|simplyhired|glassdoor|ziprecruiter|monster|careerbuilder|job listings?|jobs in|employment)'
+      AND COALESCE(website_url,'') !~* '(indeed\\.com|simplyhired\\.com|glassdoor\\.com|ziprecruiter\\.com|monster\\.com|careerbuilder\\.com|zippia\\.com|jooble\\.org|talent\\.com|salary\\.com|builtin\\.com|applicantpro\\.com|greenhouse\\.io|lever\\.co|workdayjobs\\.com)'
+      AND COALESCE(notes,'') !~* '(job listings?|jobs in|employment in|hiring site)'
       AND id NOT IN (
         SELECT DISTINCT prospect_id
         FROM growth_campaign_recipients
