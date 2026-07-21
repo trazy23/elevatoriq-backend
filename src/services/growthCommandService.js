@@ -698,17 +698,17 @@ async function upsertResearchedProspect(prospect, defaultMarket) {
 
   const update = await db.query(`
     UPDATE growth_prospects
-    SET market=COALESCE($2, market),
-        buyer_type=COALESCE($3, buyer_type),
-        decision_maker=COALESCE($4, decision_maker),
-        title=COALESCE($5, title),
-        email=COALESCE($6, email),
-        linkedin_url=COALESCE($7, linkedin_url),
-        website_url=COALESCE($8, website_url),
-        elevator_relevance=COALESCE($9, elevator_relevance),
-        priority_score=GREATEST(COALESCE(priority_score,0), $10),
-        notes=concat_ws('\n\n', NULLIF(notes,''), $11),
-        source=$12,
+    SET market=COALESCE($2::text, market),
+        buyer_type=COALESCE($3::text, buyer_type),
+        decision_maker=COALESCE($4::text, decision_maker),
+        title=COALESCE($5::text, title),
+        email=COALESCE($6::text, email),
+        linkedin_url=COALESCE($7::text, linkedin_url),
+        website_url=COALESCE($8::text, website_url),
+        elevator_relevance=COALESCE($9::text, elevator_relevance),
+        priority_score=GREATEST(COALESCE(priority_score,0), $10::int),
+        notes=concat_ws('\n\n', NULLIF(notes,''), $11::text),
+        source=$12::text,
         updated_at=NOW()
     WHERE id=$13
     RETURNING id
