@@ -42,7 +42,7 @@
   <section id="controls" class="section active"><div class="grid three" id="controlsGrid"></div></section>
   <section id="approvals" class="section"><div id="approvalsList"></div></section>
   <section id="agents" class="section"><div class="grid three" id="agentsGrid"></div></section>
-  <section id="campaigns" class="section"><div class="card"><h2>Campaigns</h2><div class="scroll"><table id="campaignTable"></table></div></div></section>
+  <section id="campaigns" class="section"><div class="card"><h2>Campaigns</h2><div class="scroll"><table id="campaignTable"></table></div></div><div id="campaignDrafts"></div></section>
   <section id="prospects" class="section"><div class="card"><h2>Prospects</h2><div class="scroll"><table id="prospectTable"></table></div></div></section>
   <section id="activity" class="section"><div class="card"><h2>Recent Activity</h2><div class="scroll"><table id="activityTable"></table></div></div></section>
 </main>
@@ -53,8 +53,8 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const CONTROL_META={
   site_qa_agent:{button:'Run QA checklist',hint:'Creates a launch QA review item for upload, preview, Stripe, report quality, and admin protection.'},
-  prospecting_agent:{button:'Build prospects',hint:'Adds the next Michigan/Midwest ICP targets and queues CEO review. No external sends.'},
-  outreach_agent:{button:'Draft outreach batch',hint:'Builds a small approval-gated campaign from available prospects. Safe mode queues only.'},
+  prospecting_agent:{button:'Build prospects',hint:'Runs live public web research/enrichment for Michigan/Midwest ICP targets. No external sends.'},
+  outreach_agent:{button:'Draft outreach batch',hint:'Writes individualized email drafts for available prospects and queues them for CEO approval. Safe mode queues only.'},
   content_agent:{button:'Draft content',hint:'Creates faceless LinkedIn/company-page post approvals.'},
   product_intel_agent:{button:'Run product intel',hint:'Queues the report-quality, objections, and Rulebook feedback loop.'},
   scoreboard_agent:{button:'Refresh scoreboard',hint:'Updates executive summary/activity with the current launch state.'}
@@ -75,7 +75,7 @@ async function decide(id,decision){ const notes=prompt('Notes for this decision?
 function showAgentTab(){ document.querySelector('[data-tab="agents"]').click(); }
 function renderAgents(){ $('agentsGrid').innerHTML=STATE.agents.map(a=>'<div class="card agent"><div class="agentTop"><h2>'+esc(a.name)+'</h2>'+status(a.status)+'</div><div class="pill">'+esc(a.lane)+'</div><p>'+esc(a.current_work||'No current work logged.')+'</p><p class="small"><b>Last output:</b> '+esc(a.last_output||'—')+'</p><p class="small">Last run: '+fmtDate(a.last_run_at)+'<br>Next run: '+fmtDate(a.next_run_at)+'</p><div class="actions"><button onclick="runAgent(\''+esc(a.key)+'\')">Run now</button></div></div>').join(''); }
 function table(rows,cols){ if(!rows.length) return '<tr><td>No rows yet.</td></tr>'; return '<thead><tr>'+cols.map(c=>'<th>'+esc(c)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+cols.map(c=>'<td>'+esc(r[c]??'—')+'</td>').join('')+'</tr>').join('')+'</tbody>'; }
-function renderCampaigns(){ $('campaignTable').innerHTML=table(CAMPAIGNS,['name','channel','status','approval_status','recipient_count','sent_count','failed_count','subject','created_at']); }
+function renderCampaigns(){ $('campaignTable').innerHTML=table(CAMPAIGNS,['name','channel','status','approval_status','recipient_count','sent_count','failed_count','subject','created_at']); const drafts=CAMPAIGNS.filter(c=>Array.isArray(c.recipient_drafts)&&c.recipient_drafts.length).slice(0,5); $('campaignDrafts').innerHTML=drafts.length?drafts.map(c=>'<div class="card"><h2>Recipient drafts — '+esc(c.name)+'</h2><div class="pill">'+esc(c.recipient_count)+' recipient drafts · '+esc(c.status)+' · '+fmtDate(c.created_at)+'</div>'+c.recipient_drafts.map(r=>'<div class="card" style="margin-top:12px;background:#0b1628"><div class="agentTop"><h2>'+esc(r.company||'Recipient')+'</h2>'+status(r.status)+'</div><div class="small">'+esc(r.email||'No verified email yet')+'</div><p><b>Subject:</b> '+esc(r.final_subject||'—')+'</p><p><b>Personalized hook:</b> '+esc(r.personalized_opening||'—')+'</p><pre>'+esc(r.final_body||'—')+'</pre></div>').join('')+'</div>').join(''):'<div class="card"><h2>No recipient drafts yet</h2><p class="muted">Click Draft outreach batch to generate individualized email drafts from approved/researched prospects.</p></div>'; }
 function renderProspects(){ $('prospectTable').innerHTML=table(PROSPECTS,['company','market','buyer_type','decision_maker','title','email','priority_score','status','approval_status','last_contacted_at','next_follow_up_at','reply_summary','revenue_cents']); }
 function renderActivity(){ $('activityTable').innerHTML=table(STATE.recent_activity,['created_at','agent_key','event_type','title','detail']); }
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab,.section').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.tab).classList.add('active')});

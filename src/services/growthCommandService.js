@@ -313,7 +313,22 @@ async function listCampaigns() {
     SELECT c.*,
       COUNT(r.id)::int AS recipient_count,
       COUNT(r.id) FILTER (WHERE r.status='sent')::int AS sent_count,
-      COUNT(r.id) FILTER (WHERE r.status='failed')::int AS failed_count
+      COUNT(r.id) FILTER (WHERE r.status='failed')::int AS failed_count,
+      COALESCE(
+        json_agg(
+          json_build_object(
+            'id', r.id,
+            'company', r.company,
+            'email', r.email,
+            'name', r.name,
+            'personalized_opening', r.personalized_opening,
+            'final_subject', r.final_subject,
+            'final_body', r.final_body,
+            'status', r.status
+          ) ORDER BY r.created_at
+        ) FILTER (WHERE r.id IS NOT NULL),
+        '[]'::json
+      ) AS recipient_drafts
     FROM growth_campaigns c
     LEFT JOIN growth_campaign_recipients r ON r.campaign_id = c.id
     GROUP BY c.id
@@ -864,56 +879,206 @@ async function runOutreachAgent() {
     SELECT * FROM growth_prospects
     WHERE status IN ('researched','ready_for_approval','approved')
       AND COALESCE(approval_status,'not_requested') <> 'rejected'
-    ORDER BY priority_score DESC, created_at DESC
+      AND id NOT IN (
+        SELECT DISTINCT prospect_id
+        FROM growth_campaign_recipients
+        WHERE prospect_id IS NOT NULL
+          AND status IN ('ready_for_approval','approved','queued','sending','sent')
+          AND created_at > NOW() - INTERVAL '21 days'
+      )
+    ORDER BY
+      CASE WHEN email IS NOT NULL AND email <> '' THEN 0 ELSE 1 END,
+      priority_score DESC,
+      created_at DESC
     LIMIT 5
   `);
   if (!prospects.rows.length) {
-    return { created: 0, message: 'No eligible prospects found. Run Prospecting Agent first.', current_work: 'Waiting for prospects.' };
+    return { created: 0, message: 'No eligible prospects found. Run Prospecting Agent first, or review existing campaign drafts before creating another batch.', current_work: 'Waiting for fresh prospects.' };
   }
 
-  const subject = 'Quick elevator invoice / bid review preview';
-  const body = `Hi {{first_name}},
-
-ElevatorIQ helps property managers and facility teams review elevator invoices, maintenance contracts, and modernization bids before they overpay or sign something unclear.
-
-You can upload one elevator invoice, contract, or proposal and get a free preview first. If the preview is useful, the full plain-English report is $99.
-
-Would it make sense to send one recent elevator document through for a quick review preview?
-
-Thanks,
-The ElevatorIQ Team
-https://elevatoriq.ai`;
+  const drafts = prospects.rows.map((prospect) => buildPersonalizedOutreachDraft(prospect));
+  const campaignSubject = 'Personalized elevator document review preview';
+  const campaignBody = buildCampaignBodySummary(drafts);
   const campaign = await db.query(`
     INSERT INTO growth_campaigns (name, channel, objective, subject, body, cta, status, approval_status, owner_agent_key)
     VALUES ($1,'email',$2,$3,$4,$5,'ready_for_approval','pending','outreach_agent')
     RETURNING id
   `, [
-    `CEO-triggered outreach batch ${new Date().toISOString().slice(0, 10)}`,
-    'Prepare a small approval-gated batch for property/facility operators. Safe mode keeps this queued until live actions are explicitly enabled.',
-    subject,
-    body,
-    'Ask for one elevator document upload for a free preview.',
+    `Personalized outreach batch ${new Date().toISOString().slice(0, 10)}`,
+    'Prepare individualized, CEO-approval-gated emails for property/facility operators. Safe mode keeps this queued until live actions are explicitly enabled.',
+    campaignSubject,
+    campaignBody,
+    'Ask for one elevator invoice, contract, or proposal upload for a free preview.',
   ]);
 
-  for (const prospect of prospects.rows) {
+  for (const draft of drafts) {
+    // eslint-disable-next-line no-await-in-loop
     await db.query(`
-      INSERT INTO growth_campaign_recipients (campaign_id, prospect_id, company, personalized_opening, final_subject, final_body, status)
-      VALUES ($1,$2,$3,$4,$5,$6,'ready_for_approval')
-    `, [campaign.rows[0].id, prospect.id, prospect.company, `${prospect.company} appears to be a fit for ElevatorIQ because ${prospect.elevator_relevance || 'they manage properties where elevator documents may need review.'}`, subject, body]);
+      INSERT INTO growth_campaign_recipients (campaign_id, prospect_id, email, name, company, personalized_opening, final_subject, final_body, status)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'ready_for_approval')
+    `, [
+      campaign.rows[0].id,
+      draft.prospect_id,
+      draft.email,
+      draft.name,
+      draft.company,
+      draft.personalized_opening,
+      draft.subject,
+      draft.body,
+    ]);
   }
 
   const approval = await createApprovalIfMissing({
     itemType: 'campaign',
     itemId: campaign.rows[0].id,
-    title: `Approve outreach campaign: ${prospects.rows.length}-target property manager batch`,
-    summary: `Outreach Agent drafted a ${prospects.rows.length}-target email campaign. Approval queues the campaign in safe mode. Live sending still requires enriched recipient emails plus GROWTH_ACTIONS_ENABLED=true.\n\nSubject: ${subject}\n\nBody:\n${body}`,
+    title: `Approve personalized outreach campaign: ${drafts.length}-target batch`,
+    summary: buildOutreachApprovalSummary(drafts),
     riskLevel: 'medium',
     agentKey: 'outreach_agent',
     actionType: 'queue_campaign',
-    actionPayload: { campaign_id: campaign.rows[0].id, recipient_count: prospects.rows.length },
+    actionPayload: {
+      campaign_id: campaign.rows[0].id,
+      recipient_count: drafts.length,
+      personalized: true,
+      recipients_with_email: drafts.filter((draft) => draft.email).length,
+      safe_mode_note: 'Approval queues only unless GROWTH_ACTIONS_ENABLED=true. Recipients without emails require manual contact/enrichment before live sending.',
+    },
   });
 
-  return { created: 1, needs_review: true, current_work: 'Campaign drafted. Awaiting CEO approval.', message: `Drafted 1 campaign with ${prospects.rows.length} recipients for approval.`, campaign_id: campaign.rows[0].id, approval_id: approval.id };
+  return {
+    created: 1,
+    needs_review: true,
+    current_work: 'Personalized campaign drafted. Awaiting CEO approval/edit request.',
+    message: `Drafted ${drafts.length} personalized email${drafts.length === 1 ? '' : 's'} for CEO approval. ${drafts.filter((draft) => draft.email).length} have public emails/contact emails on file.`,
+    campaign_id: campaign.rows[0].id,
+    approval_id: approval.id,
+  };
+}
+
+function buildPersonalizedOutreachDraft(prospect) {
+  const company = cleanForEmail(prospect.company || 'your team');
+  const contactName = inferFirstName(prospect.decision_maker);
+  const salutation = contactName ? `Hi ${contactName},` : 'Hi,';
+  const relevance = buildPersonalizedOpening(prospect);
+  const useCase = chooseOutreachUseCase(prospect);
+  const subject = buildPersonalizedSubject(prospect, useCase);
+  const body = [
+    salutation,
+    '',
+    relevance,
+    '',
+    `ElevatorIQ gives property and facilities teams a free preview on one elevator ${useCase.documentType} before they decide whether to unlock the full plain-English report for $99.`,
+    '',
+    'The useful part is that it turns the document into practical review points: what looks unclear, what may need backup, what questions to ask the vendor, and what is not decision-ready yet.',
+    '',
+    useCase.ask,
+    '',
+    'Thanks,',
+    'The ElevatorIQ Team',
+    'https://elevatoriq.ai',
+  ].join('\n');
+
+  return {
+    prospect_id: prospect.id,
+    company,
+    email: prospect.email || null,
+    name: contactName || prospect.decision_maker || null,
+    subject,
+    body,
+    personalized_opening: relevance,
+    evidence_note: buildProspectEvidenceNote(prospect),
+  };
+}
+
+function buildPersonalizedSubject(prospect, useCase) {
+  const company = cleanForEmail(prospect.company || 'your properties');
+  if (/contract/i.test(useCase.documentType)) return `${company}: elevator contract review preview`;
+  if (/invoice/i.test(useCase.documentType)) return `${company}: elevator invoice review preview`;
+  if (/bid|proposal/i.test(useCase.documentType)) return `${company}: elevator bid review preview`;
+  return `${company}: elevator document review preview`;
+}
+
+function buildPersonalizedOpening(prospect) {
+  const company = cleanForEmail(prospect.company || 'your company');
+  const buyerType = cleanForEmail(prospect.buyer_type || 'property/facility operator');
+  const market = cleanForEmail(prospect.market || 'Michigan/Midwest');
+  const relevance = cleanForEmail(prospect.elevator_relevance || 'your team likely has to review vendor documents before approving elevator work');
+  if (/condo|hoa/i.test(`${prospect.buyer_type || ''} ${prospect.notes || ''}`)) {
+    return `I had ${company} on my Michigan/Midwest property-operations list because HOA and condo managers often have to explain elevator invoices, maintenance contracts, or repair proposals to boards before approving spend.`;
+  }
+  if (/multifamily|apartments|communities/i.test(`${prospect.buyer_type || ''} ${prospect.elevator_relevance || ''}`)) {
+    return `I had ${company} on my ${market} operator list because multifamily portfolios often see recurring elevator invoices, service contracts, and repair proposals across properties.`;
+  }
+  if (/commercial|real estate|asset/i.test(`${prospect.buyer_type || ''} ${prospect.elevator_relevance || ''}`)) {
+    return `I had ${company} on my ${market} commercial property list because teams managing buildings often need a quick second set of eyes on elevator contracts, invoices, and modernization bids.`;
+  }
+  return `I had ${company} on my ${market} outreach list because it appears to fit ElevatorIQ's early ICP as a ${buyerType}: ${truncateSentence(relevance, 210)}`;
+}
+
+function chooseOutreachUseCase(prospect) {
+  const combined = `${prospect.buyer_type || ''} ${prospect.elevator_relevance || ''} ${prospect.notes || ''}`.toLowerCase();
+  if (/maintenance|service contract|contract|hoa|condo/.test(combined)) {
+    return {
+      documentType: 'maintenance contract or invoice',
+      ask: 'Would it be worth having whoever handles elevator vendor decisions send one recent contract or invoice through for a free preview?',
+    };
+  }
+  if (/modernization|bid|proposal|capital|asset/.test(combined)) {
+    return {
+      documentType: 'bid or proposal',
+      ask: 'Would it be worth sending one recent elevator bid or proposal through for a free preview before the next approval conversation?',
+    };
+  }
+  return {
+    documentType: 'invoice, contract, or proposal',
+    ask: 'Would it be worth sending one recent elevator document through for a free preview?',
+  };
+}
+
+function buildCampaignBodySummary(drafts) {
+  return drafts.map((draft, index) => [
+    `Recipient ${index + 1}: ${draft.company}${draft.email ? ` <${draft.email}>` : ' — email/contact enrichment still needed'}`,
+    `Subject: ${draft.subject}`,
+    draft.body,
+  ].join('\n')).join('\n\n---\n\n');
+}
+
+function buildOutreachApprovalSummary(drafts) {
+  const withEmail = drafts.filter((draft) => draft.email).length;
+  const header = `Outreach Agent drafted ${drafts.length} individualized email${drafts.length === 1 ? '' : 's'} for CEO review. ${withEmail}/${drafts.length} currently have a public email/contact email saved. Safe mode means approval records/queues only; it will not send externally until live actions are explicitly enabled.`;
+  const recipientBlocks = drafts.map((draft, index) => [
+    `\n${index + 1}. ${draft.company}${draft.email ? ` — ${draft.email}` : ' — no verified direct email yet'}`,
+    `Evidence/personality hook: ${draft.evidence_note}`,
+    `Subject: ${draft.subject}`,
+    `Body:\n${draft.body}`,
+  ].join('\n'));
+  return [header, ...recipientBlocks].join('\n');
+}
+
+function buildProspectEvidenceNote(prospect) {
+  const parts = [];
+  if (prospect.market) parts.push(`market: ${prospect.market}`);
+  if (prospect.buyer_type) parts.push(`buyer type: ${prospect.buyer_type}`);
+  if (prospect.elevator_relevance) parts.push(`relevance: ${truncateSentence(prospect.elevator_relevance, 190)}`);
+  if (prospect.source) parts.push(`source: ${prospect.source}`);
+  return parts.join(' | ') || 'property/facility management ICP fit from Growth Command prospecting data';
+}
+
+function inferFirstName(value) {
+  const text = String(value || '').trim();
+  if (!text || /manager|director|lead|operations|facilities|property|asset|maintenance|decision maker/i.test(text)) return null;
+  const first = text.split(/\s+/)[0].replace(/[^a-z'-]/gi, '');
+  return first && first.length > 1 ? first : null;
+}
+
+function cleanForEmail(value) {
+  return compactWhitespace(String(value || '').replace(/[<>]/g, ''));
+}
+
+function truncateSentence(value, maxLength) {
+  const text = cleanForEmail(value);
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1).trim()}…`;
 }
 
 async function runContentAgent() {
