@@ -269,6 +269,18 @@ router.get('/growth/prospects', requireAdminKey, async (req, res) => {
   }
 });
 
+router.post('/growth/agents/:key/run', requireAdminKey, async (req, res) => {
+  try {
+    const growth = require('../services/growthCommandService');
+    const result = await growth.runAgent(req.params.key, req.body || {});
+    if (!result.ok) return res.status(result.status || 400).json({ error: result.error });
+    res.json(result);
+  } catch (err) {
+    console.error('POST /admin/growth/agents/:key/run error:', err);
+    res.status(500).json({ error: 'Failed to run growth agent', detail: err.message });
+  }
+});
+
 router.post('/growth/approvals/:id/approve', requireAdminKey, async (req, res) => {
   try {
     const growth = require('../services/growthCommandService');
