@@ -871,7 +871,8 @@ async function upsertResearchedProspect(prospect, defaultMarket) {
 
   const update = await db.query(`
     UPDATE growth_prospects
-    SET market=COALESCE($2::text, market),
+    SET company=COALESCE($1::text, company),
+        market=COALESCE($2::text, market),
         buyer_type=COALESCE($3::text, buyer_type),
         decision_maker=COALESCE($4::text, decision_maker),
         title=COALESCE($5::text, title),

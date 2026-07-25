@@ -11,8 +11,10 @@ if (USE_MOCK_DB) {
   db = require('./db-mock');
 } else {
   console.log('[DB] Using PostgreSQL (Supabase)');
+  const needsSsl = /sslmode=require|render\.com/i.test(DATABASE_URL) || process.env.DATABASE_SSL === 'true';
   const pool = new Pool({
     connectionString: DATABASE_URL,
+    ...(needsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
   });
 
   pool.on('error', (err) => {
