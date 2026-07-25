@@ -76,6 +76,7 @@ async function getSummary() {
     db.query(`
       SELECT
         COUNT(*) FILTER (WHERE status='pending')::int AS pending,
+        COUNT(*) FILTER (WHERE status='needs_edits')::int AS needs_edits,
         COUNT(*) FILTER (WHERE status='approved')::int AS approved,
         COUNT(*) FILTER (WHERE status='executed')::int AS executed,
         COUNT(*) FILTER (WHERE status='failed')::int AS failed
@@ -304,6 +305,8 @@ https://elevatoriq.ai`;
 
 function buildExecutiveSummary({ p, c, a, agents }) {
   const pending = Number(a.pending || 0);
+  const edits = Number(a.needs_edits || 0);
+  const actionItems = pending + edits;
   const sent = Number(p.sent || 0);
   const replies = Number(p.replies || 0);
   const uploads = Number(p.uploads || 0);
@@ -311,8 +314,8 @@ function buildExecutiveSummary({ p, c, a, agents }) {
   const runningAgents = agents.filter((agent) => agent.status === 'running').length;
   const blockedAgents = agents.filter((agent) => ['blocked', 'error'].includes(agent.status)).length;
 
-  const nextDecision = pending > 0
-    ? `${pending} item${pending === 1 ? '' : 's'} waiting for CEO approval.`
+  const nextDecision = actionItems > 0
+    ? `${actionItems} approval item${actionItems === 1 ? '' : 's'} need CEO action (${pending} pending, ${edits} need edits).`
     : 'No approval blockers right now; next move is fill the queue with qualified prospects and drafts.';
 
   const traction = paid > 0
@@ -333,7 +336,7 @@ function buildExecutiveSummary({ p, c, a, agents }) {
     headline: nextDecision,
     traction,
     agent_health: agentHealth,
-    recommended_ceo_action: pending > 0 ? 'Review the approval queue and approve/reject/edit the highest-priority outbound items.' : 'Ask the Prospecting and Outreach agents to prepare the next 25-target batch.',
+    recommended_ceo_action: actionItems > 0 ? 'Review the approval queue and approve, edit/resubmit, or reject the highest-priority outbound items.' : 'Ask the Prospecting and Outreach agents to prepare the next 25-target batch.',
   };
 }
 
@@ -345,7 +348,7 @@ async function listApprovals() {
     FROM growth_approvals a
     LEFT JOIN growth_agents ag ON ag.key = a.requested_by_agent_key
     WHERE a.status <> 'rejected'
-    ORDER BY CASE a.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, a.created_at DESC
+    ORDER BY CASE a.status WHEN 'pending' THEN 0 WHEN 'needs_edits' THEN 1 WHEN 'approved' THEN 2 ELSE 3 END, a.created_at DESC
     LIMIT 100
   `);
   return result.rows;
@@ -1387,6 +1390,60 @@ async function rejectItem(approvalId, status, decisionNotes = '') {
   return { ok: true, approval: result.rows[0] };
 }
 
+async function editApprovalItem(approvalId, updates = {}) {
+  const existing = await db.query(`SELECT * FROM growth_approvals WHERE id=$1::uuid`, [approvalId]);
+  if (!existing.rows.length) return { ok: false, status: 404, error: 'Approval not found' };
+  const approval = existing.rows[0];
+  if (!['pending', 'needs_edits', 'failed', 'approved'].includes(approval.status)) {
+    return { ok: false, status: 409, error: `Approval is ${approval.status} and cannot be edited.` };
+  }
+
+  const title = typeof updates.title === 'string' && updates.title.trim() ? updates.title.trim() : approval.title;
+  const summary = typeof updates.summary === 'string' ? updates.summary.trim() : approval.summary;
+  const notes = typeof updates.notes === 'string' ? updates.notes.trim() : '';
+  let actionPayload = approval.action_payload || {};
+
+  if (approval.action_type === 'post_content' && typeof updates.post_text === 'string') {
+    const text = updates.post_text.trim();
+    if (text) actionPayload = { ...actionPayload, text, draft: text };
+  }
+
+  if (approval.action_type === 'send_email' && (typeof updates.email_subject === 'string' || typeof updates.email_body === 'string')) {
+    actionPayload = {
+      ...actionPayload,
+      subject: typeof updates.email_subject === 'string' && updates.email_subject.trim() ? updates.email_subject.trim() : actionPayload.subject,
+      body: typeof updates.email_body === 'string' && updates.email_body.trim() ? updates.email_body.trim() : actionPayload.body,
+    };
+  }
+
+  const result = await db.query(`
+    UPDATE growth_approvals
+    SET title=$2::text,
+        summary=$3::text,
+        action_payload=$4::jsonb,
+        status='pending',
+        decision_notes=concat_ws('
+
+', NULLIF(decision_notes,''), NULLIF($5::text,'')),
+        decided_at=NULL,
+        executed_at=NULL,
+        action_result=NULL,
+        updated_at=NOW()
+    WHERE id=$1::uuid
+    RETURNING *
+  `, [approvalId, title, summary, JSON.stringify(actionPayload), notes ? `Edited/resubmitted: ${notes}` : 'Edited/resubmitted from Growth Command Center.']);
+
+  await logActivity({
+    agentKey: approval.requested_by_agent_key,
+    eventType: 'approval_edit',
+    title: `${title} — edited and resubmitted`,
+    detail: notes || 'Edited in Growth Command Center and moved back to pending approval.',
+    payload: { approval_id: approvalId, action_type: approval.action_type },
+  });
+
+  return { ok: true, approval: result.rows[0], message: 'Approval edited and moved back to pending.' };
+}
+
 async function executeApprovalAction(approval) {
   if (approval.action_type === 'none' || !approval.action_type) {
     return { status: 'executed', message: 'Approval recorded; no external action configured.' };
@@ -1712,4 +1769,5 @@ module.exports = {
   runAgent,
   approveItem,
   rejectItem,
+  editApprovalItem,
 };

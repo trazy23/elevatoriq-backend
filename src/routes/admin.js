@@ -306,6 +306,18 @@ router.post('/growth/approvals/:id/reject', requireAdminKey, async (req, res) =>
   }
 });
 
+router.post('/growth/approvals/:id/edit', requireAdminKey, async (req, res) => {
+  try {
+    const growth = require('../services/growthCommandService');
+    const result = await growth.editApprovalItem(req.params.id, req.body || {});
+    if (!result.ok) return res.status(result.status || 400).json({ error: result.error });
+    res.json(result);
+  } catch (err) {
+    console.error('POST /admin/growth/approvals/:id/edit error:', err);
+    res.status(500).json({ error: 'Failed to edit growth approval item', detail: err.message });
+  }
+});
+
 // GET /api/admin/metrics — Dashboard metrics for free/paid tier analytics
 router.get('/metrics', requireAdminKey, async (req, res) => {
   try {
