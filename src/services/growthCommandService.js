@@ -16,7 +16,9 @@ function getExecutionReadiness() {
   const emailConfigured = configured(process.env.EMAIL_PROVIDER_API_KEY)
     && configured(process.env.OUTREACH_FROM_EMAIL || process.env.FROM_EMAIL || BRAND.reportsFromEmail);
   const bufferConfigured = configured(process.env.BUFFER_ACCESS_TOKEN) && configured(process.env.BUFFER_PROFILE_ID);
-  const linkedinConfigured = configured(process.env.LINKEDIN_ACCESS_TOKEN) && configured(process.env.LINKEDIN_ORGANIZATION_URN);
+  const linkedinOrgId = process.env.LINKEDIN_ORGANIZATION_ID || String(process.env.LINKEDIN_ORGANIZATION_URN || '').replace(/^urn:li:organization:/, '');
+  const linkedinConfigured = configured(process.env.LINKEDIN_ACCESS_TOKEN) && configured(linkedinOrgId);
+  const browserBridgeConfigured = process.env.LINKEDIN_BROWSER_BRIDGE_ENABLED === 'true';
   return {
     live_actions_enabled: actionsEnabled(),
     email_outreach: {
@@ -28,11 +30,12 @@ function getExecutionReadiness() {
       ].filter(Boolean),
     },
     social_posting: {
-      ready: bufferConfigured || linkedinConfigured,
-      provider: bufferConfigured ? 'buffer' : (linkedinConfigured ? 'linkedin' : null),
-      missing: bufferConfigured || linkedinConfigured ? [] : [
+      ready: bufferConfigured || linkedinConfigured || browserBridgeConfigured,
+      provider: bufferConfigured ? 'buffer' : (linkedinConfigured ? 'linkedin' : (browserBridgeConfigured ? 'linkedin_browser_bridge' : null)),
+      missing: bufferConfigured || linkedinConfigured || browserBridgeConfigured ? [] : [
         configured(process.env.BUFFER_ACCESS_TOKEN) ? 'BUFFER_PROFILE_ID' : 'BUFFER_ACCESS_TOKEN + BUFFER_PROFILE_ID',
-        configured(process.env.LINKEDIN_ACCESS_TOKEN) ? 'LINKEDIN_ORGANIZATION_URN' : 'LINKEDIN_ACCESS_TOKEN + LINKEDIN_ORGANIZATION_URN',
+        configured(process.env.LINKEDIN_ACCESS_TOKEN) ? 'LINKEDIN_ORGANIZATION_ID' : 'LINKEDIN_ACCESS_TOKEN + LINKEDIN_ORGANIZATION_ID',
+        'or LINKEDIN_BROWSER_BRIDGE_ENABLED=true with the local browser bridge running',
       ],
     },
   };
@@ -1580,6 +1583,9 @@ async function publishApprovedContent(payload = {}) {
   }
 
   if (readiness.social_posting.provider === 'buffer') return publishViaBuffer(text, payload);
+  if (readiness.social_posting.provider === 'linkedin_browser_bridge') {
+    return queueForLinkedInBrowserBridge(text, payload);
+  }
   return publishViaLinkedInOrganization(text, payload);
 }
 
@@ -1607,25 +1613,54 @@ async function publishViaBuffer(text, payload = {}) {
   return { status: 'executed', provider: 'buffer', posted: true, id: updateId, message: 'Post published/queued through Buffer.', proof: updateId ? `Buffer update id: ${updateId}` : 'Buffer accepted the update.' };
 }
 
+async function queueForLinkedInBrowserBridge(text, payload = {}) {
+  const bridgePayload = {
+    channel: payload.channel || 'linkedin_company_page',
+    text,
+    mode: payload.mode || 'publish_now',
+    organization_id: process.env.LINKEDIN_ORGANIZATION_ID || '113327148',
+    queued_at: new Date().toISOString(),
+  };
+  await logActivity({
+    agentKey: 'content_agent',
+    eventType: 'social_post_queued',
+    title: 'LinkedIn post queued for local browser bridge',
+    detail: 'Approval was accepted and queued for the logged-in Chrome LinkedIn browser bridge. The local bridge publishes and returns proof.',
+    payload: bridgePayload,
+  });
+  return {
+    status: 'approved',
+    provider: 'linkedin_browser_bridge',
+    queued: true,
+    posted: false,
+    message: 'Queued for LinkedIn browser bridge. The logged-in Chrome bridge will publish and return proof.',
+    next_step: 'Keep Chrome logged into the ElevatorIQ LinkedIn page and run ~/.hermes/scripts/linkedin_company_post.py --browser for pending approved posts.',
+    bridge: bridgePayload,
+  };
+}
+
 async function publishViaLinkedInOrganization(text) {
-  const response = await fetchWithTimeout('https://api.linkedin.com/v2/ugcPosts', {
+  const organizationId = process.env.LINKEDIN_ORGANIZATION_ID || String(process.env.LINKEDIN_ORGANIZATION_URN || '').replace(/^urn:li:organization:/, '');
+  const response = await fetchWithTimeout('https://api.linkedin.com/rest/posts', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${process.env.LINKEDIN_ACCESS_TOKEN}`,
       'Content-Type': 'application/json',
       Accept: 'application/json',
+      'LinkedIn-Version': process.env.LINKEDIN_API_VERSION || '202606',
       'X-Restli-Protocol-Version': '2.0.0',
     },
     body: JSON.stringify({
-      author: process.env.LINKEDIN_ORGANIZATION_URN,
-      lifecycleState: 'PUBLISHED',
-      specificContent: {
-        'com.linkedin.ugc.ShareContent': {
-          shareCommentary: { text },
-          shareMediaCategory: 'NONE',
-        },
+      author: `urn:li:organization:${organizationId}`,
+      commentary: text,
+      visibility: 'PUBLIC',
+      distribution: {
+        feedDistribution: 'MAIN_FEED',
+        targetEntities: [],
+        thirdPartyDistributionChannels: [],
       },
-      visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' },
+      lifecycleState: 'PUBLISHED',
+      isReshareDisabledByAuthor: false,
     }),
   }, 12000);
   const bodyText = await response.text();
