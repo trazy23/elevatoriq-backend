@@ -179,7 +179,7 @@ async function ensureStarterGrowthData() {
       INSERT INTO growth_prospects (
         company, market, buyer_type, decision_maker, title, website_url,
         elevator_relevance, priority_score, status, approval_status, notes, source
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'ready_for_approval','pending',$9,'starter_launch_seed')
+      ) VALUES ($1::text,$2::text,$3::text,$4::text,$5::text,$6::text,$7::text,$8::int,'ready_for_approval','pending',$9::text,'starter_launch_seed')
       RETURNING *
     `, [
       prospect.company,
@@ -227,7 +227,7 @@ https://elevatoriq.ai`;
     await db.query(`
       INSERT INTO growth_campaign_recipients (
         campaign_id, prospect_id, company, personalized_opening, final_subject, final_body, status
-      ) VALUES ($1,$2,$3,$4,$5,$6,'ready_for_approval')
+      ) VALUES ($1::uuid,$2::uuid,$3::text,$4::text,$5::text,$6::text,'ready_for_approval')
     `, [
       campaign.rows[0].id,
       prospect.id,
@@ -241,7 +241,7 @@ https://elevatoriq.ai`;
   await db.query(`
     INSERT INTO growth_approvals (
       item_type, item_id, title, summary, risk_level, requested_by_agent_key, action_type, action_payload
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+    ) VALUES ($1::text,$2::uuid,$3::text,$4::text,$5::text,$6::text,$7::text,$8::jsonb)
   `, [
     'campaign',
     campaign.rows[0].id,
@@ -256,7 +256,7 @@ https://elevatoriq.ai`;
   await db.query(`
     INSERT INTO growth_approvals (
       item_type, title, summary, risk_level, requested_by_agent_key, action_type, action_payload
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7)
+    ) VALUES ($1::text,$2::text,$3::text,$4::text,$5::text,$6::text,$7::jsonb)
   `, [
     'other',
     'Approve Prospecting Agent to enrich first 25 Michigan targets',
@@ -860,7 +860,7 @@ async function upsertResearchedProspect(prospect, defaultMarket) {
         company, market, buyer_type, decision_maker, title, email, linkedin_url, website_url,
         elevator_relevance, priority_score, status, approval_status, notes, source, updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'researched','not_requested',$11,$12,NOW())
+      VALUES ($1::text,$2::text,$3::text,$4::text,$5::text,$6::text,$7::text,$8::text,$9::text,$10::int,'researched','not_requested',$11::text,$12::text,NOW())
       RETURNING id
     `, values);
     return { inserted: insert.rowCount > 0, updated: false };
@@ -880,7 +880,7 @@ async function upsertResearchedProspect(prospect, defaultMarket) {
         notes=concat_ws('\n\n', NULLIF(notes,''), $11::text),
         source=$12::text,
         updated_at=NOW()
-    WHERE id=$13
+    WHERE id=$13::uuid
     RETURNING id
   `, [...values, existing.rows[0].id]);
   return { inserted: false, updated: update.rowCount > 0 };
@@ -1103,7 +1103,7 @@ async function runOutreachAgent() {
   const campaignBody = buildCampaignBodySummary(drafts);
   const campaign = await db.query(`
     INSERT INTO growth_campaigns (name, channel, objective, subject, body, cta, status, approval_status, owner_agent_key)
-    VALUES ($1,'email',$2,$3,$4,$5,'ready_for_approval','pending','outreach_agent')
+    VALUES ($1::text,'email',$2::text,$3::text,$4::text,$5::text,'ready_for_approval','pending','outreach_agent')
     RETURNING id
   `, [
     `Personalized outreach batch ${new Date().toISOString().slice(0, 10)}`,
@@ -1117,7 +1117,7 @@ async function runOutreachAgent() {
     // eslint-disable-next-line no-await-in-loop
     await db.query(`
       INSERT INTO growth_campaign_recipients (campaign_id, prospect_id, email, name, company, personalized_opening, final_subject, final_body, status)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'ready_for_approval')
+      VALUES ($1::uuid,$2::uuid,$3::text,$4::text,$5::text,$6::text,$7::text,$8::text,'ready_for_approval')
     `, [
       campaign.rows[0].id,
       draft.prospect_id,
@@ -1341,7 +1341,7 @@ async function runScoreboardAgent() {
 }
 
 async function approveItem(approvalId, decisionNotes = '') {
-  const approvalResult = await db.query(`SELECT * FROM growth_approvals WHERE id=$1`, [approvalId]);
+  const approvalResult = await db.query(`SELECT * FROM growth_approvals WHERE id=$1::uuid`, [approvalId]);
   if (!approvalResult.rows.length) return { ok: false, status: 404, error: 'Approval not found' };
 
   const approval = approvalResult.rows[0];
@@ -1375,7 +1375,7 @@ async function approveItem(approvalId, decisionNotes = '') {
 async function rejectItem(approvalId, status, decisionNotes = '') {
   if (!['needs_edits', 'rejected'].includes(status)) throw new Error('Invalid rejection status');
   const result = await db.query(
-    `UPDATE growth_approvals SET status=$2, decision_notes=$3, decided_at=NOW(), updated_at=NOW() WHERE id=$1 RETURNING *`,
+    `UPDATE growth_approvals SET status=$2, decision_notes=$3, decided_at=NOW(), updated_at=NOW() WHERE id=$1::uuid RETURNING *`,
     [approvalId, status, decisionNotes || null]
   );
   if (!result.rows.length) return { ok: false, status: 404, error: 'Approval not found' };
@@ -1483,7 +1483,7 @@ async function sendApprovedCampaign(campaignId) {
       await db.query(`
         UPDATE growth_campaign_recipients
         SET status='failed', error='Missing verified email, subject, or body; enrich before sending.', updated_at=NOW()
-        WHERE id=$1
+        WHERE id=$1::uuid
       `, [recipient.id]);
       results.push({ recipient_id: recipient.id, company: recipient.company, status: 'skipped', error: 'Missing email/subject/body' });
       continue;
