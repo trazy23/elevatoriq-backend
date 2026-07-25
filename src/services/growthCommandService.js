@@ -8,6 +8,36 @@ function actionsEnabled() {
   return process.env.GROWTH_ACTIONS_ENABLED === 'true';
 }
 
+function configured(value) {
+  return Boolean(String(value || '').trim());
+}
+
+function getExecutionReadiness() {
+  const emailConfigured = configured(process.env.EMAIL_PROVIDER_API_KEY)
+    && configured(process.env.OUTREACH_FROM_EMAIL || process.env.FROM_EMAIL || BRAND.reportsFromEmail);
+  const bufferConfigured = configured(process.env.BUFFER_ACCESS_TOKEN) && configured(process.env.BUFFER_PROFILE_ID);
+  const linkedinConfigured = configured(process.env.LINKEDIN_ACCESS_TOKEN) && configured(process.env.LINKEDIN_ORGANIZATION_URN);
+  return {
+    live_actions_enabled: actionsEnabled(),
+    email_outreach: {
+      ready: emailConfigured,
+      provider: 'resend',
+      missing: [
+        configured(process.env.EMAIL_PROVIDER_API_KEY) ? null : 'EMAIL_PROVIDER_API_KEY',
+        configured(process.env.OUTREACH_FROM_EMAIL || process.env.FROM_EMAIL || BRAND.reportsFromEmail) ? null : 'OUTREACH_FROM_EMAIL or FROM_EMAIL',
+      ].filter(Boolean),
+    },
+    social_posting: {
+      ready: bufferConfigured || linkedinConfigured,
+      provider: bufferConfigured ? 'buffer' : (linkedinConfigured ? 'linkedin' : null),
+      missing: bufferConfigured || linkedinConfigured ? [] : [
+        configured(process.env.BUFFER_ACCESS_TOKEN) ? 'BUFFER_PROFILE_ID' : 'BUFFER_ACCESS_TOKEN + BUFFER_PROFILE_ID',
+        configured(process.env.LINKEDIN_ACCESS_TOKEN) ? 'LINKEDIN_ORGANIZATION_URN' : 'LINKEDIN_ACCESS_TOKEN + LINKEDIN_ORGANIZATION_URN',
+      ],
+    },
+  };
+}
+
 function centsToDollars(cents) {
   return Math.round(Number(cents || 0)) / 100;
 }
@@ -60,6 +90,7 @@ async function getSummary() {
 
   return {
     actions_enabled: actionsEnabled(),
+    execution_readiness: getExecutionReadiness(),
     generated_at: new Date().toISOString(),
     executive_summary: executiveSummary,
     prospects: { ...p, revenue_dollars: centsToDollars(p.revenue_cents) },
@@ -1266,12 +1297,12 @@ async function runContentAgent() {
       summary: `${posts[i]}\n\nCTA: Upload one elevator invoice, contract, or proposal at elevatoriq.ai for a free preview.`,
       riskLevel: 'low',
       agentKey: 'content_agent',
-      actionType: 'none',
-      actionPayload: { channel: 'linkedin_company_page', draft: posts[i] },
+      actionType: 'post_content',
+      actionPayload: { channel: 'linkedin_company_page', text: `${posts[i]}\n\nUpload one elevator invoice, contract, or proposal at https://elevatoriq.ai for a free preview.`, draft: posts[i], mode: 'publish_now' },
     });
     if (approval.created) created += 1;
   }
-  return { created, needs_review: true, current_work: 'Content drafts ready for CEO approval.', message: `Created ${created} new content approval item${created === 1 ? '' : 's'} for faceless authority posts.` };
+  return { created, needs_review: true, current_work: 'Content posts ready for CEO approval. Approval will publish if live actions and a social provider are configured; otherwise it records the exact connection step needed.', message: `Created ${created} new content approval item${created === 1 ? '' : 's'} for faceless authority posts.` };
 }
 
 async function runSiteQaAgent() {
@@ -1369,6 +1400,10 @@ async function executeApprovalAction(approval) {
     const campaignId = approval.item_type === 'campaign' ? approval.item_id : approval.action_payload?.campaign_id;
     if (!campaignId) return { status: 'failed', error: 'Missing campaign_id' };
     return sendApprovedCampaign(campaignId);
+  }
+
+  if (approval.action_type === 'post_content') {
+    return publishApprovedContent(approval.action_payload || {});
   }
 
   if (approval.action_type === 'mark_prospect_approved') {
@@ -1519,6 +1554,88 @@ async function sendApprovedCampaign(campaignId) {
     message: `Campaign processed. Sent ${sent}, skipped ${skipped}, failed ${failed}.`,
     results,
   };
+}
+
+async function publishApprovedContent(payload = {}) {
+  const text = payload.text || payload.body || payload.draft;
+  if (!text) return { status: 'failed', error: 'Missing post text for post_content action' };
+
+  const readiness = getExecutionReadiness();
+  if (!readiness.social_posting.ready) {
+    await logActivity({
+      agentKey: 'content_agent',
+      eventType: 'social_post_blocked',
+      title: 'Content approval needs social account connection',
+      detail: 'No Buffer or LinkedIn company-page posting target is configured. Connect Buffer profile or LinkedIn organization URN, then approve again.',
+      payload: { channel: payload.channel || 'linkedin_company_page', missing: readiness.social_posting.missing },
+    });
+    return {
+      status: 'needs_edits',
+      provider: null,
+      posted: false,
+      message: 'No post was published. Social posting is not connected yet.',
+      next_step: 'Open browser for Buffer/LinkedIn connection, then set BUFFER_PROFILE_ID or LINKEDIN_ORGANIZATION_URN on the backend.',
+      missing: readiness.social_posting.missing,
+    };
+  }
+
+  if (readiness.social_posting.provider === 'buffer') return publishViaBuffer(text, payload);
+  return publishViaLinkedInOrganization(text, payload);
+}
+
+async function publishViaBuffer(text, payload = {}) {
+  const params = new URLSearchParams();
+  params.append('text', text);
+  params.append('profile_ids[]', process.env.BUFFER_PROFILE_ID);
+  params.append('now', payload.schedule_at ? 'false' : 'true');
+  if (payload.schedule_at) params.append('scheduled_at', payload.schedule_at);
+
+  const response = await fetchWithTimeout('https://api.bufferapp.com/1/updates/create.json', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.BUFFER_ACCESS_TOKEN}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+    },
+    body: params.toString(),
+  }, 12000);
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || body.success === false) {
+    return { status: 'failed', provider: 'buffer', posted: false, error: body.message || body.error || `Buffer publish failed: ${response.status}` };
+  }
+  const updateId = body.updates?.[0]?.id || body.update?.id || body.id || null;
+  return { status: 'executed', provider: 'buffer', posted: true, id: updateId, message: 'Post published/queued through Buffer.', proof: updateId ? `Buffer update id: ${updateId}` : 'Buffer accepted the update.' };
+}
+
+async function publishViaLinkedInOrganization(text) {
+  const response = await fetchWithTimeout('https://api.linkedin.com/v2/ugcPosts', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.LINKEDIN_ACCESS_TOKEN}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'X-Restli-Protocol-Version': '2.0.0',
+    },
+    body: JSON.stringify({
+      author: process.env.LINKEDIN_ORGANIZATION_URN,
+      lifecycleState: 'PUBLISHED',
+      specificContent: {
+        'com.linkedin.ugc.ShareContent': {
+          shareCommentary: { text },
+          shareMediaCategory: 'NONE',
+        },
+      },
+      visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' },
+    }),
+  }, 12000);
+  const bodyText = await response.text();
+  let body = {};
+  try { body = JSON.parse(bodyText); } catch (_err) { body = { raw: bodyText }; }
+  if (!response.ok) {
+    return { status: 'failed', provider: 'linkedin', posted: false, error: body.message || body.serviceErrorCode || `LinkedIn publish failed: ${response.status}`, detail: body };
+  }
+  const postId = response.headers.get('x-restli-id') || body.id || null;
+  return { status: 'executed', provider: 'linkedin', posted: true, id: postId, message: 'Post published to LinkedIn organization page.', proof: postId ? `LinkedIn post id: ${postId}` : 'LinkedIn accepted the post.' };
 }
 
 async function sendApprovedEmail(payload) {
