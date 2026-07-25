@@ -21,6 +21,7 @@ const backendRoot = path.join(__dirname, '..');
 const bridgeEnvPath = process.env.EIQ_BRIDGE_ENV_FILE || path.join(os.homedir(), '.hermes', 'secrets', 'elevatoriq-render.env');
 require('dotenv').config({ path: fs.existsSync(bridgeEnvPath) ? bridgeEnvPath : path.join(backendRoot, '.env') });
 const db = require('../src/db');
+const { alertLoginRequired } = require('./growth-login-alerts');
 
 const DEFAULT_BROWSER_URL = process.env.APOLLO_CHROME_BROWSER_URL || 'http://127.0.0.1:9222';
 const DEFAULT_SEARCH_URL = process.env.APOLLO_EIQ_SEARCH_URL || 'https://app.apollo.io/#/people?sortByField=%5Bnone%5D&sortAscending=false&page=1&qKeywords=property%20manager&contactEmailStatusV2[]=verified&personLocations[]=Michigan%2C%20United%20States&recommendationConfigId=score';
@@ -317,6 +318,34 @@ async function runBridge() {
     await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await page.waitForTimeout(3000);
     statusBefore = await getApolloStatus(page);
+  }
+  if (!statusBefore.logged_in) {
+    const context = `Apollo bridge could not see the People search after opening ${statusBefore.url || 'Apollo'}. Daily enrichment cannot reveal/import verified emails until Apollo is logged in.`;
+    const alert = alertLoginRequired('apollo', context);
+    const payload = {
+      ran_at: nowIso(),
+      mode,
+      dry_run: dryRun,
+      lane: 'ElevatorIQ',
+      market,
+      search_url: page.url(),
+      status_before: statusBefore,
+      login_required: true,
+      alert,
+      credits_already_used_today: creditsAlreadyUsed,
+      daily_credit_cap: dailyCap,
+      reveal_limit: 0,
+      credits_used: 0,
+      visible_rows: 0,
+      sendable_rows: 0,
+      inserted: 0,
+      updated: 0,
+      skipped: 0,
+      detail: 'Apollo bridge stopped: Apollo login required. Telegram login alert sent if cooldown allowed.',
+    };
+    await logActivity(payload);
+    await browser.disconnect();
+    return payload;
   }
 
   let reveal = { clicked: 0, attempts: [] };

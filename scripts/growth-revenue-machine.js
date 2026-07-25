@@ -22,6 +22,7 @@ require('dotenv').config({ path: fs.existsSync(bridgeEnvPath) ? bridgeEnvPath : 
 
 const db = require('../src/db');
 const growth = require('../src/services/growthCommandService');
+const { alertLoginRequired } = require('./growth-login-alerts');
 
 const ACCOUNT = process.env.GROWTH_HIMALAYA_ACCOUNT || 'elevatoriq';
 const DEFAULT_MARKET = process.env.GROWTH_DEFAULT_MARKET || 'Michigan / Midwest';
@@ -81,7 +82,30 @@ function runApolloBridge({ market, revealLimit = APOLLO_DAILY_REVEAL_LIMIT, impo
     const output = execFileSync('node', args, { encoding: 'utf8', timeout: 180_000, cwd: backendRoot, stdio: ['ignore', 'pipe', 'pipe'] });
     return { ok: true, ...safeJson(output, { raw_output: output }) };
   } catch (err) {
-    return { ok: false, error: err.message, stderr: err.stderr ? String(err.stderr).slice(0, 2000) : null };
+    const result = { ok: false, error: err.message, stderr: err.stderr ? String(err.stderr).slice(0, 2000) : null };
+    if (/login|logged.?in|sign in|auth|apollo/i.test(`${result.error}\n${result.stderr || ''}`)) {
+      result.login_required_alert = alertLoginRequired('apollo', `Daily Growth Command report could not use Apollo enrichment. Error: ${result.error}`);
+    }
+    return result;
+  }
+}
+
+function checkLinkedInReadiness() {
+  const poster = path.join(os.homedir(), '.hermes', 'scripts', 'linkedin_company_post.py');
+  if (!fs.existsSync(poster)) return { ok: false, skipped: true, message: 'LinkedIn poster script missing.' };
+  try {
+    const out = execFileSync('python3', [poster, '--browser', '--dry-run', '--text', 'ElevatorIQ growth-machine readiness check — not publishing.'], { encoding: 'utf8', timeout: 120_000 });
+    const parsed = safeJson(out, {});
+    const ok = parsed.status === 'ready' && parsed.post_button_found && !parsed.post_button_disabled;
+    const result = { ok, ...parsed };
+    if (!ok) {
+      result.login_required_alert = alertLoginRequired('linkedin', `Daily Growth Command report checked LinkedIn before content/posting work and the browser path was not ready. Status: ${parsed.status || 'unknown'}; error: ${parsed.error || 'Post button/page admin path not ready.'}`);
+    }
+    return result;
+  } catch (err) {
+    const result = { ok: false, error: err.message, stderr: err.stderr ? String(err.stderr).slice(0, 2000) : null };
+    result.login_required_alert = alertLoginRequired('linkedin', `Daily Growth Command report could not verify LinkedIn posting readiness. Error: ${result.error}`);
+    return result;
   }
 }
 
@@ -283,18 +307,22 @@ async function revenueSnapshot() {
   return { summary, pipeline: pipeline.rows, approvals: approvals.rows, recent: recent.rows };
 }
 
-function formatReport({ dailyResult, apollo, replies, followups, snapshot }) {
+function formatReport({ dailyResult, apollo, linkedin, replies, followups, snapshot }) {
   const p = snapshot.summary.prospects || {};
   const a = snapshot.summary.approvals || {};
   const c = snapshot.summary.campaigns || {};
   const pipeline = snapshot.pipeline.map((row) => `${row.status}: ${row.count}`).join(', ') || 'none';
   const apolloLine = apollo?.ok
     ? `Apollo bridge: used ${apollo.credits_used || 0} credit(s), visible ${apollo.visible_rows || 0}, sendable ${apollo.sendable_rows || 0}, imported ${apollo.inserted || 0}, updated ${apollo.updated || 0}.`
-    : `Apollo bridge: ${apollo?.error ? `failed (${apollo.error})` : 'not run'}.`;
+    : `Apollo bridge: ${apollo?.login_required ? 'login required; Telegram alert sent/skipped by cooldown' : (apollo?.error ? `failed (${apollo.error})` : 'not run')}.`;
+  const linkedinLine = linkedin?.ok
+    ? 'LinkedIn bridge: ready for approved posts.'
+    : `LinkedIn bridge: ${linkedin?.error || linkedin?.message || 'not ready'}; Telegram login alert sent/skipped by cooldown.`;
   return [
     'ElevatorIQ Growth Command daily run complete.',
     '',
     apolloLine,
+    linkedinLine,
     `Done: web prospecting ${dailyResult.prospecting?.result?.message || dailyResult.prospecting?.message || 'not run'}; outreach ${dailyResult.outreach?.result?.message || dailyResult.outreach?.message || 'not run'}; content ${dailyResult.content?.result?.message || dailyResult.content?.message || 'not run'}.`,
     `Reply monitor: checked ${replies.checked}, matched ${replies.matched}, queued ${replies.actionable || 0} response approval(s).`,
     `Follow-ups: ${followups.due} due, ${followups.created} approval(s) queued.`,
@@ -314,6 +342,7 @@ async function runDaily() {
     dryRun: boolArg('apollo-dry-run'),
   });
   const dailyResult = {};
+  const linkedin = checkLinkedInReadiness();
   dailyResult.prospecting = await growth.runAgent('prospecting_agent', { source: 'daily_machine_web_fallback', market, batch_size: batchSize });
   dailyResult.outreach = await growth.runAgent('outreach_agent', { source: 'daily_machine' });
   dailyResult.content = await growth.runAgent('content_agent', { source: 'daily_machine' });
@@ -321,8 +350,8 @@ async function runDaily() {
   const followups = await queueFollowUps();
   dailyResult.scoreboard = await growth.runAgent('scoreboard_agent', { source: 'daily_machine' });
   const snapshot = await revenueSnapshot();
-  const report = formatReport({ dailyResult, apollo, replies, followups, snapshot });
-  await logActivity({ agentKey: 'scoreboard_agent', eventType: 'daily_revenue_machine', title: 'Daily revenue machine completed', detail: report, payload: { apollo, dailyResult, replies, followups, snapshot: { pipeline: snapshot.pipeline, approvals: snapshot.approvals } } });
+  const report = formatReport({ dailyResult, apollo, linkedin, replies, followups, snapshot });
+  await logActivity({ agentKey: 'scoreboard_agent', eventType: 'daily_revenue_machine', title: 'Daily revenue machine completed', detail: report, payload: { apollo, linkedin, dailyResult, replies, followups, snapshot: { pipeline: snapshot.pipeline, approvals: snapshot.approvals } } });
   return report;
 }
 
@@ -359,16 +388,8 @@ async function runVerify() {
     const out = runHimalaya(['envelope', 'list', '--account', ACCOUNT, '--output', 'json', '--page-size', '3']);
     checks.push(`himalaya: read ${safeJson(out, []).length} inbox item(s)`);
   } catch (err) { checks.push(`himalaya: failed ${err.message}`); }
-  const poster = path.join(os.homedir(), '.hermes', 'scripts', 'linkedin_company_post.py');
-  if (fs.existsSync(poster)) {
-    try {
-      const out = execFileSync('python3', [poster, '--browser', '--dry-run', '--text', 'ElevatorIQ growth-machine readiness check — not publishing.'], { encoding: 'utf8', timeout: 120_000 });
-      const parsed = safeJson(out, {});
-      checks.push(`linkedin_browser: ${parsed.status || 'unknown'}; post button found ${Boolean(parsed.post_button_found)}`);
-    } catch (err) { checks.push(`linkedin_browser: failed ${err.message}`); }
-  } else {
-    checks.push('linkedin_browser: poster script missing');
-  }
+  const linkedin = checkLinkedInReadiness();
+  checks.push(`linkedin_browser: ${linkedin.ok ? 'ready' : `failed ${linkedin.error || linkedin.message || linkedin.status || 'not ready'}`}`);
   return checks.join('\n');
 }
 

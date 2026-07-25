@@ -15,6 +15,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { alertLoginRequired } = require('./growth-login-alerts');
 const defaultEnvPath = path.join(__dirname, '..', '.env');
 const bridgeEnvPath = process.env.EIQ_BRIDGE_ENV_FILE || path.join(os.homedir(), '.hermes', 'secrets', 'elevatoriq-render.env');
 require('dotenv').config({ path: fs.existsSync(bridgeEnvPath) ? bridgeEnvPath : defaultEnvPath });
@@ -72,6 +73,16 @@ function runPoster(text) {
   };
 }
 
+function needsLinkedInLoginAlert(poster) {
+  const combined = [
+    poster?.result?.error,
+    poster?.result?.message,
+    poster?.stderr,
+    poster?.stdout,
+  ].filter(Boolean).join('\n');
+  return /login|logged.?in|administer|admin access|editor not found|company page|checkpoint|auth|sign in|session/i.test(combined);
+}
+
 async function processOnce() {
   const client = await pool.connect();
   try {
@@ -106,6 +117,11 @@ async function processOnce() {
 
       console.log(`[${new Date().toISOString()}] Publishing LinkedIn approval ${approval.id}: ${approval.title}`);
       const poster = runPoster(text);
+      if (poster.exitCode !== 0 && needsLinkedInLoginAlert(poster)) {
+        const context = `LinkedIn bridge was trying to publish approved Growth Command item "${approval.title}" but the browser session/page admin path is not ready. Error: ${poster.result?.error || poster.stderr || 'LinkedIn posting failed.'}`;
+        const alert = alertLoginRequired('linkedin', context);
+        poster.result = { ...poster.result, login_required_alert: alert };
+      }
       const ok = poster.exitCode === 0 && ['executed', 'ready'].includes(poster.result.status);
       const actionResult = {
         ...(approval.action_result || {}),
