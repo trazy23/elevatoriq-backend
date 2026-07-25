@@ -396,7 +396,7 @@ async function listProspects() {
 async function runAgent(agentKey, options = {}) {
   await ensureStarterGrowthData();
 
-  const agentResult = await db.query(`SELECT * FROM growth_agents WHERE key=$1`, [agentKey]);
+  const agentResult = await db.query(`SELECT * FROM growth_agents WHERE key=$1::text`, [agentKey]);
   if (!agentResult.rows.length) return { ok: false, status: 404, error: 'Agent not found' };
 
   await setAgent(agentKey, {
@@ -441,19 +441,19 @@ async function setAgent(agentKey, { status, currentWork, lastOutput, lastRunAt =
   if (lastOutput !== undefined) { updates.push(`last_output=$${i++}`); values.push(lastOutput); }
   if (lastRunAt) updates.push('last_run_at=NOW()');
   if (nextRunAt !== undefined) { updates.push(`next_run_at=$${i++}`); values.push(nextRunAt); }
-  await db.query(`UPDATE growth_agents SET ${updates.join(', ')} WHERE key=$1`, values);
+  await db.query(`UPDATE growth_agents SET ${updates.join(', ')} WHERE key=$1::text`, values);
 }
 
 async function createApprovalIfMissing({ itemType = 'other', itemId = null, title, summary, riskLevel = 'low', agentKey, actionType = 'none', actionPayload = {} }) {
   const existing = await db.query(
-    `SELECT id FROM growth_approvals WHERE title=$1 AND status='pending' LIMIT 1`,
+    `SELECT id FROM growth_approvals WHERE title=$1::text AND status='pending' LIMIT 1`,
     [title]
   );
   if (existing.rows.length) return { id: existing.rows[0].id, created: false };
   const result = await db.query(`
     INSERT INTO growth_approvals (
       item_type, item_id, title, summary, risk_level, requested_by_agent_key, action_type, action_payload
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id
+    ) VALUES ($1::text,$2::uuid,$3::text,$4::text,$5::text,$6::text,$7::text,$8::jsonb) RETURNING id
   `, [itemType, itemId, title, summary, riskLevel, agentKey, actionType, JSON.stringify(actionPayload)]);
   return { id: result.rows[0].id, created: true };
 }
@@ -1663,7 +1663,7 @@ function textToHtml(text = '') {
 
 async function logActivity({ agentKey = null, eventType, title, detail = null, payload = {} }) {
   await db.query(
-    `INSERT INTO growth_activity_events (agent_key, event_type, title, detail, payload) VALUES ($1,$2,$3,$4,$5)`,
+    `INSERT INTO growth_activity_events (agent_key, event_type, title, detail, payload) VALUES ($1::text,$2::text,$3::text,$4::text,$5::jsonb)`,
     [agentKey, eventType, title, detail, JSON.stringify(payload)]
   );
 }
