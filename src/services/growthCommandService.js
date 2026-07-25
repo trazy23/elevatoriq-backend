@@ -671,7 +671,7 @@ async function quarantineBadProspects() {
     UPDATE growth_approvals
     SET status='rejected', decided_at=NOW(), decision_notes='Auto-rejected: contained job board / employment listing / non-ICP prospect data.'
     WHERE status='pending'
-      AND (title ~* $1 OR COALESCE(summary,'') ~* $1)
+      AND (title ~* $1::text OR COALESCE(summary,'') ~* $1::text)
     RETURNING id
   `, [badPattern]);
 
@@ -679,10 +679,10 @@ async function quarantineBadProspects() {
     SELECT id FROM growth_prospects
     WHERE status NOT IN ('do_not_contact','not_fit')
       AND (
-        company ~* $1
-        OR COALESCE(website_url,'') ~* $1
-        OR COALESCE(notes,'') ~* $1
-        OR COALESCE(elevator_relevance,'') ~* $1
+        company ~* $1::text
+        OR COALESCE(website_url,'') ~* $1::text
+        OR COALESCE(notes,'') ~* $1::text
+        OR COALESCE(elevator_relevance,'') ~* $1::text
       )
   `, [badPattern]);
 
