@@ -26,12 +26,18 @@ const growth = require('../src/services/growthCommandService');
 const ACCOUNT = process.env.GROWTH_HIMALAYA_ACCOUNT || 'elevatoriq';
 const DEFAULT_MARKET = process.env.GROWTH_DEFAULT_MARKET || 'Michigan / Midwest';
 const DEFAULT_BATCH = Number(process.env.GROWTH_DAILY_BATCH_SIZE || 12);
+const APOLLO_DAILY_REVEAL_LIMIT = Number(process.env.APOLLO_REVEAL_LIMIT || 5);
+const APOLLO_DAILY_IMPORT_LIMIT = Number(process.env.APOLLO_IMPORT_LIMIT || 10);
 
 function arg(name, fallback = null) {
   const idx = process.argv.indexOf(`--${name}`);
   if (idx >= 0 && process.argv[idx + 1]) return process.argv[idx + 1];
   const inline = process.argv.find((item) => item.startsWith(`--${name}=`));
   return inline ? inline.slice(name.length + 3) : fallback;
+}
+
+function boolArg(name) {
+  return process.argv.includes(`--${name}`);
 }
 
 async function logActivity({ agentKey = 'scoreboard_agent', eventType, title, detail = null, payload = {} }) {
@@ -51,7 +57,32 @@ function runHimalaya(args, options = {}) {
 }
 
 function safeJson(text, fallback) {
-  try { return JSON.parse(text); } catch (_err) { return fallback; }
+  try { return JSON.parse(text); } catch (_err) {
+    const jsonStart = String(text || '').indexOf('{');
+    const jsonEnd = String(text || '').lastIndexOf('}');
+    if (jsonStart >= 0 && jsonEnd > jsonStart) {
+      try { return JSON.parse(String(text).slice(jsonStart, jsonEnd + 1)); } catch (_err2) { /* fall through */ }
+    }
+    return fallback;
+  }
+}
+
+function runApolloBridge({ market, revealLimit = APOLLO_DAILY_REVEAL_LIMIT, importLimit = APOLLO_DAILY_IMPORT_LIMIT, dryRun = false } = {}) {
+  const script = path.join(__dirname, 'apollo-enrichment-bridge.js');
+  if (!fs.existsSync(script)) return { ok: false, skipped: true, message: 'Apollo bridge script missing.' };
+  const args = [
+    script,
+    '--mode', dryRun ? 'dry-run' : 'once',
+    '--market', market || DEFAULT_MARKET,
+    '--reveal-limit', String(revealLimit),
+    '--import-limit', String(importLimit),
+  ];
+  try {
+    const output = execFileSync('node', args, { encoding: 'utf8', timeout: 180_000, cwd: backendRoot, stdio: ['ignore', 'pipe', 'pipe'] });
+    return { ok: true, ...safeJson(output, { raw_output: output }) };
+  } catch (err) {
+    return { ok: false, error: err.message, stderr: err.stderr ? String(err.stderr).slice(0, 2000) : null };
+  }
 }
 
 function normalizeEmail(value = '') {
@@ -252,15 +283,19 @@ async function revenueSnapshot() {
   return { summary, pipeline: pipeline.rows, approvals: approvals.rows, recent: recent.rows };
 }
 
-function formatReport({ dailyResult, replies, followups, snapshot }) {
+function formatReport({ dailyResult, apollo, replies, followups, snapshot }) {
   const p = snapshot.summary.prospects || {};
   const a = snapshot.summary.approvals || {};
   const c = snapshot.summary.campaigns || {};
   const pipeline = snapshot.pipeline.map((row) => `${row.status}: ${row.count}`).join(', ') || 'none';
+  const apolloLine = apollo?.ok
+    ? `Apollo bridge: used ${apollo.credits_used || 0} credit(s), visible ${apollo.visible_rows || 0}, sendable ${apollo.sendable_rows || 0}, imported ${apollo.inserted || 0}, updated ${apollo.updated || 0}.`
+    : `Apollo bridge: ${apollo?.error ? `failed (${apollo.error})` : 'not run'}.`;
   return [
     'ElevatorIQ Growth Command daily run complete.',
     '',
-    `Done: prospecting ${dailyResult.prospecting?.result?.message || dailyResult.prospecting?.message || 'not run'}; outreach ${dailyResult.outreach?.result?.message || dailyResult.outreach?.message || 'not run'}; content ${dailyResult.content?.result?.message || dailyResult.content?.message || 'not run'}.`,
+    apolloLine,
+    `Done: web prospecting ${dailyResult.prospecting?.result?.message || dailyResult.prospecting?.message || 'not run'}; outreach ${dailyResult.outreach?.result?.message || dailyResult.outreach?.message || 'not run'}; content ${dailyResult.content?.result?.message || dailyResult.content?.message || 'not run'}.`,
     `Reply monitor: checked ${replies.checked}, matched ${replies.matched}, queued ${replies.actionable || 0} response approval(s).`,
     `Follow-ups: ${followups.due} due, ${followups.created} approval(s) queued.`,
     `Scoreboard: prospects ${p.total || 0}, campaigns ${c.total || 0}, pending approvals ${a.pending || 0}, sent ${p.sent || 0}, replies ${p.replies || 0}, uploads ${p.uploads || 0}, paid ${p.paid || 0}, revenue $${Math.round(Number(p.revenue_cents || 0) / 100)}.`,
@@ -272,16 +307,22 @@ function formatReport({ dailyResult, replies, followups, snapshot }) {
 async function runDaily() {
   const market = arg('market', DEFAULT_MARKET);
   const batchSize = Number(arg('batch-size', DEFAULT_BATCH));
+  const apollo = runApolloBridge({
+    market,
+    revealLimit: Number(arg('apollo-reveal-limit', APOLLO_DAILY_REVEAL_LIMIT)),
+    importLimit: Number(arg('apollo-import-limit', APOLLO_DAILY_IMPORT_LIMIT)),
+    dryRun: boolArg('apollo-dry-run'),
+  });
   const dailyResult = {};
-  dailyResult.prospecting = await growth.runAgent('prospecting_agent', { source: 'daily_machine', market, batch_size: batchSize });
+  dailyResult.prospecting = await growth.runAgent('prospecting_agent', { source: 'daily_machine_web_fallback', market, batch_size: batchSize });
   dailyResult.outreach = await growth.runAgent('outreach_agent', { source: 'daily_machine' });
   dailyResult.content = await growth.runAgent('content_agent', { source: 'daily_machine' });
   const replies = await monitorReplies({ pageSize: 40 });
   const followups = await queueFollowUps();
   dailyResult.scoreboard = await growth.runAgent('scoreboard_agent', { source: 'daily_machine' });
   const snapshot = await revenueSnapshot();
-  const report = formatReport({ dailyResult, replies, followups, snapshot });
-  await logActivity({ agentKey: 'scoreboard_agent', eventType: 'daily_revenue_machine', title: 'Daily revenue machine completed', detail: report, payload: { dailyResult, replies, followups, snapshot: { pipeline: snapshot.pipeline, approvals: snapshot.approvals } } });
+  const report = formatReport({ dailyResult, apollo, replies, followups, snapshot });
+  await logActivity({ agentKey: 'scoreboard_agent', eventType: 'daily_revenue_machine', title: 'Daily revenue machine completed', detail: report, payload: { apollo, dailyResult, replies, followups, snapshot: { pipeline: snapshot.pipeline, approvals: snapshot.approvals } } });
   return report;
 }
 
