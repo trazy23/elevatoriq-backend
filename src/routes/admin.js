@@ -318,6 +318,95 @@ router.post('/growth/approvals/:id/edit', requireAdminKey, async (req, res) => {
   }
 });
 
+router.get('/procura/summary', requireAdminKey, async (req, res) => {
+  try {
+    const procura = require('../services/procuraCommandService');
+    res.json(await procura.getSummary());
+  } catch (err) {
+    console.error('GET /admin/procura/summary error:', err);
+    res.status(500).json({ error: 'Failed to load Procura summary', detail: err.message });
+  }
+});
+
+router.get('/procura/approvals', requireAdminKey, async (req, res) => {
+  try {
+    const procura = require('../services/procuraCommandService');
+    res.json({ approvals: await procura.listApprovals() });
+  } catch (err) {
+    console.error('GET /admin/procura/approvals error:', err);
+    res.status(500).json({ error: 'Failed to load Procura approvals', detail: err.message });
+  }
+});
+
+router.get('/procura/campaigns', requireAdminKey, async (req, res) => {
+  try {
+    const procura = require('../services/procuraCommandService');
+    res.json({ campaigns: await procura.listCampaigns() });
+  } catch (err) {
+    console.error('GET /admin/procura/campaigns error:', err);
+    res.status(500).json({ error: 'Failed to load Procura campaigns', detail: err.message });
+  }
+});
+
+router.get('/procura/opportunities', requireAdminKey, async (req, res) => {
+  try {
+    const procura = require('../services/procuraCommandService');
+    res.json({ opportunities: await procura.listOpportunities() });
+  } catch (err) {
+    console.error('GET /admin/procura/opportunities error:', err);
+    res.status(500).json({ error: 'Failed to load Procura opportunities', detail: err.message });
+  }
+});
+
+router.post('/procura/agents/:key/run', requireAdminKey, async (req, res) => {
+  try {
+    const procura = require('../services/procuraCommandService');
+    const result = await procura.runAgent(req.params.key, req.body || {});
+    if (!result.ok) return res.status(result.status || 400).json({ error: result.error });
+    res.json(result);
+  } catch (err) {
+    console.error('POST /admin/procura/agents/:key/run error:', err);
+    res.status(500).json({ error: 'Failed to run Procura agent', detail: err.message });
+  }
+});
+
+router.post('/procura/approvals/:id/approve', requireAdminKey, async (req, res) => {
+  try {
+    const procura = require('../services/procuraCommandService');
+    const result = await procura.approveItem(req.params.id, req.body?.notes || '');
+    if (!result.ok) return res.status(result.status || 400).json({ error: result.error });
+    res.json(result);
+  } catch (err) {
+    console.error('POST /admin/procura/approvals/:id/approve error:', err);
+    res.status(500).json({ error: 'Failed to approve Procura item', detail: err.message });
+  }
+});
+
+router.post('/procura/approvals/:id/reject', requireAdminKey, async (req, res) => {
+  try {
+    const procura = require('../services/procuraCommandService');
+    const status = req.body?.status === 'rejected' ? 'rejected' : 'needs_edits';
+    const result = await procura.rejectItem(req.params.id, status, req.body?.notes || '');
+    if (!result.ok) return res.status(result.status || 400).json({ error: result.error });
+    res.json(result);
+  } catch (err) {
+    console.error('POST /admin/procura/approvals/:id/reject error:', err);
+    res.status(500).json({ error: 'Failed to reject Procura item', detail: err.message });
+  }
+});
+
+router.post('/procura/approvals/:id/edit', requireAdminKey, async (req, res) => {
+  try {
+    const procura = require('../services/procuraCommandService');
+    const result = await procura.editApprovalItem(req.params.id, req.body || {});
+    if (!result.ok) return res.status(result.status || 400).json({ error: result.error });
+    res.json(result);
+  } catch (err) {
+    console.error('POST /admin/procura/approvals/:id/edit error:', err);
+    res.status(500).json({ error: 'Failed to edit Procura approval item', detail: err.message });
+  }
+});
+
 // GET /api/admin/metrics — Dashboard metrics for free/paid tier analytics
 router.get('/metrics', requireAdminKey, async (req, res) => {
   try {
