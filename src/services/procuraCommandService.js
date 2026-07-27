@@ -165,7 +165,7 @@ async function getSummary() {
   return {
     generated_at: new Date().toISOString(),
     operating_rules: {
-      outreach_from: 'Brinker Exchange email once configured in Himalaya',
+      outreach_from: 'Brinker Exchange email via macOS Mail.app bridge',
       signature: 'Trey Zackery, Brinker Group',
       geography: 'National',
       market_filter: 'Market opportunities, not relationship-constrained',
@@ -355,14 +355,14 @@ async function approveItem(id, notes='') {
   const r = await db.query(`SELECT * FROM procura_approvals WHERE id=$1`, [id]);
   if (!r.rows.length) return { ok:false, status:404, error:'Approval not found' };
   const item = r.rows[0];
-  let result = { status:'recorded', message:'Approval recorded. External Procura sending still requires Exchange sending path to be explicitly wired/tested.' };
+  let result = { status:'recorded', message:'Approval recorded.' };
   if (item.action_type === 'mark_opportunity_approved' && item.item_id) {
     await db.query(`UPDATE procura_opportunities SET status='approved', approval_status='approved', updated_at=NOW() WHERE id=$1`, [item.item_id]);
     result = { status:'done', message:'Opportunity marked approved.' };
   } else if (item.action_type === 'queue_campaign' && item.item_id) {
-    await db.query(`UPDATE procura_campaigns SET status='approved', approval_status='approved', updated_at=NOW() WHERE id=$1`, [item.item_id]);
-    await db.query(`UPDATE procura_campaign_recipients SET status='approved', updated_at=NOW() WHERE campaign_id=$1 AND status='ready_for_approval'`, [item.item_id]);
-    result = { status:'queued', message:'Procura campaign approved inside command center. Sending is not automatic until Exchange SMTP path is connected and tested.' };
+    await db.query(`UPDATE procura_campaigns SET status='queued', approval_status='approved', updated_at=NOW() WHERE id=$1`, [item.item_id]);
+    await db.query(`UPDATE procura_campaign_recipients SET status='queued', updated_at=NOW() WHERE campaign_id=$1 AND status IN ('ready_for_approval','approved')`, [item.item_id]);
+    result = { status:'queued', message:'Procura campaign queued for Brinker Exchange Mail.app bridge. The local worker will send approved recipients and write proof back.' };
   }
   await db.query(`UPDATE procura_approvals SET status='executed', decision_notes=$2, decided_at=NOW(), executed_at=NOW(), action_result=$3::jsonb, updated_at=NOW() WHERE id=$1`, [id, notes, JSON.stringify(result)]);
   await logActivity({agentKey:item.requested_by_agent_key || 'procura_scoreboard_agent',eventType:'approval_executed',title:item.title,detail:result.message,payload:{approval_id:id,result}});
