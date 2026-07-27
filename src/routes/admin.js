@@ -358,6 +358,18 @@ router.get('/procura/opportunities', requireAdminKey, async (req, res) => {
   }
 });
 
+
+router.post('/procura/bdr/seed', requireAdminKey, async (req, res) => {
+  try {
+    const procura = require('../services/procuraCommandService');
+    const result = await procura.seedBdrMemberAccounts();
+    res.json({ ok: true, result });
+  } catch (err) {
+    console.error('POST /admin/procura/bdr/seed error:', err);
+    res.status(500).json({ error: 'Failed to seed Procura BDR accounts', detail: err.message });
+  }
+});
+
 router.post('/procura/agents/:key/run', requireAdminKey, async (req, res) => {
   try {
     const procura = require('../services/procuraCommandService');
