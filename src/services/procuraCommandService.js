@@ -306,8 +306,13 @@ async function seedBdrMemberAccounts() {
 function outreachCopy(opportunity) {
   const lane = laneLabel(opportunity.lane);
   const firstName = String(opportunity.decision_maker || opportunity.name || '').split(/\s+/)[0].replace(/[,]/g,'') || 'there';
-  const subject = `Procurement support for ${lane} supplies`;
-  const body = `Hi ${firstName},\n\nI’m Trey Zackery with Brinker Group. We’re building Procura as a practical sourcing lane for facility and operations teams that need dependable pricing and fulfillment across categories like ${lane}, Jan/San, MRO, paint, electrical, and flooring.\n\nI’m not trying to add noise to your inbox — I’m looking for teams that occasionally need a second source, quote support, or a cleaner way to compare supply options.\n\nIf you’re the right person, is there a current category, recurring item list, or upcoming buy where a second quote would be useful? If not, who usually owns that for your team?\n\nThanks,\nTrey Zackery\nBrinker Group`;
+  const allCategories = ['Jan/San', 'MRO', 'paint', 'electrical', 'flooring'];
+  const relatedCategories = allCategories.filter((c) => c.toLowerCase() !== lane.toLowerCase());
+  const categoryLine = lane === 'Multi'
+    ? allCategories.join(', ')
+    : `${lane} along with related facility categories like ${relatedCategories.join(', ')}`;
+  const subject = `Quick question on ${lane} / facilities procurement`;
+  const body = `Hi ${firstName},\n\nI’m Trey Zackery with Brinker Group. We’re building Procura as a practical sourcing lane for facility and procurement teams across ${categoryLine}.\n\nI’m reaching out in a low-pressure way because we’re looking for the right teams where Procura could be useful as a second source, quote support, or a cleaner way to compare options on recurring facility needs.\n\nIf you’re the right person, is there a current category, recurring item list, or upcoming buy where a second quote would be helpful? If not, who usually owns that for your team?\n\nThanks,\nTrey Zackery\nBrinker Group`;
   return { subject, body };
 }
 
