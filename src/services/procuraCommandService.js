@@ -311,8 +311,13 @@ function outreachCopy(opportunity) {
   const categoryLine = lane === 'Multi'
     ? allCategories.join(', ')
     : `${lane} along with related facility categories like ${relatedCategories.join(', ')}`;
+  const sourceText = `${opportunity.source || ''} ${opportunity.notes || ''} ${opportunity.opportunity_signal || ''}`;
+  const isBdr = /\bBDR\b|Billion Dollar Roundtable|supplier diversity/i.test(sourceText);
   const subject = `Quick question on ${lane} / facilities procurement`;
-  const body = `Hi ${firstName},\n\nI’m Trey Zackery with Brinker Group. We’re building Procura as a practical sourcing lane for facility and procurement teams across ${categoryLine}.\n\nI’m reaching out in a low-pressure way because we’re looking for the right teams where Procura could be useful as a second source, quote support, or a cleaner way to compare options on recurring facility needs.\n\nIf you’re the right person, is there a current category, recurring item list, or upcoming buy where a second quote would be helpful? If not, who usually owns that for your team?\n\nThanks,\nTrey Zackery\nBrinker Group`;
+  const bdrContext = isBdr
+    ? `\n\nBecause Brinker Group is an MBE, I also think this could be relevant to supplier-diversity conversations — but I want to start with the practical category/quote need, not overcomplicate it.`
+    : '';
+  const body = `Hi ${firstName},\n\nI’m Trey Zackery with Brinker Group. We’re building Procura as a practical sourcing lane for facility and procurement teams across ${categoryLine}.${bdrContext}\n\nI’m reaching out in a low-pressure way because we’re looking for the right teams where Procura could be useful as a second source, quote support, or a cleaner way to compare options on recurring facility needs.\n\nIf you’re the right person, is there a current category, recurring item list, or upcoming buy where a second quote would be helpful? If not, who usually owns that for your team?\n\nMore context: https://procurasource.com\n\nThanks,\nTrey Zackery\nBrinker Group`;
   return { subject, body };
 }
 
@@ -330,7 +335,7 @@ async function draftOutreachBatch({ limit=10 }={}) {
     await db.query(`INSERT INTO procura_campaign_recipients (campaign_id,opportunity_id,email,name,company,personalized_opening,final_subject,final_body,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'ready_for_approval')`, [campaign.rows[0].id,p.id,p.email,p.decision_maker,p.company,`${p.company} appears relevant for ${laneLabel(p.lane)} / facilities procurement.`,copy.subject,copy.body]);
     recipients++;
   }
-  await createApprovalIfMissing({ itemType:'campaign', itemId:campaign.rows[0].id, title:`Approve Procura outreach campaign: ${recipients}-target batch`, summary:`${recipients} individualized Brinker/Procura outreach drafts are ready.\n\nSender/signature: Trey Zackery, Brinker Group.\nGeography: national.\nLanes: paint, electrical, flooring, Jan/San, MRO.\n\nApproval will queue/send only after exact review. No EVP title used.`, actionType:'queue_campaign', actionPayload:{ campaign_id: campaign.rows[0].id, recipients }, agentKey:'procura_outreach_agent', riskLevel:'high' });
+  await createApprovalIfMissing({ itemType:'campaign', itemId:campaign.rows[0].id, title:`Approve Procura outreach campaign: ${recipients}-target batch`, summary:`${recipients} individualized Brinker/Procura outreach drafts are ready.\n\nSender/signature: Trey Zackery, Brinker Group.\nWebsite included: https://procurasource.com\nGeography: national.\nLanes: paint, electrical, flooring, Jan/San, MRO.\nBDR/supplier-diversity drafts include a small MBE context line without claiming guaranteed diversity credit.\n\nApproval will queue/send only after exact review. No EVP title used.`, actionType:'queue_campaign', actionPayload:{ campaign_id: campaign.rows[0].id, recipients }, agentKey:'procura_outreach_agent', riskLevel:'high' });
   await logActivity({agentKey:'procura_outreach_agent',eventType:'outreach_drafted',title:'Procura outreach batch drafted',detail:`Drafted ${recipients} approval-gated buyer emails.`,payload:{campaign_id:campaign.rows[0].id,recipients}});
   return { drafted: recipients, campaign_id: campaign.rows[0].id, message: `Drafted ${recipients} Procura outreach emails for approval.` };
 }
