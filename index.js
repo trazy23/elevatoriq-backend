@@ -47,14 +47,15 @@ const adminRouter = require('./src/routes/admin');
 const { router: paymentsRouter, handleStripeWebhook } = require('./src/routes/payments');
 const scopeGeneratorRouter = require('./src/routes/scope-generator');
 const subscribeRouter = require('./src/routes/subscribe');
+const portfolioRouter = require('./src/routes/portfolio');
 
 // Stripe webhook — MUST use raw body and MUST be registered before express.json().
 // If express.json() runs first, Stripe signature verification receives a parsed object
 // instead of the original Buffer and real webhooks fail.
 app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // Serve admin dashboard at /admin
 app.use('/admin', express.static(path.join(__dirname, 'admin')));
@@ -77,6 +78,7 @@ app.use('/api/admin', adminRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/v1/scope-generator', scopeGeneratorRouter);
 app.use('/api/subscribe', subscribeRouter);
+app.use('/api/portfolio', portfolioRouter);
 
 // Health checks
 app.get('/health', (req, res) => {
@@ -169,6 +171,20 @@ app.use((req, res) => {
 
 // Error handler
 app.use((err, req, res, next) => {
+  if (err?.type === 'entity.too.large') {
+    return res.status(413).json({
+      code: 'request_body_too_large',
+      error: 'Request body too large. Upload documents as PDF, DOC, or DOCX files up to 50 MB each.',
+    });
+  }
+
+  if (err?.name === 'MulterError' && err?.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({
+      code: 'file_too_large',
+      error: 'File exceeds the 50 MB upload limit. Please compress the file or upload a smaller PDF, DOC, or DOCX.',
+    });
+  }
+
   console.error('Unhandled error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });

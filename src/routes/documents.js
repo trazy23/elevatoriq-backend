@@ -8,6 +8,7 @@ const { detectDocumentType } = require('../services/documentTypeService');
 const { extractTextFromBuffer } = require('../services/extractionService');
 
 const path = require('path');
+const MAX_UPLOAD_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 
 /**
  * Check if a PDF is image-based (scanned) with no extractable text.
@@ -29,7 +30,7 @@ async function checkPdfReadability(buffer) {
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB
+  limits: { fileSize: MAX_UPLOAD_FILE_SIZE_BYTES }, // 50MB
   fileFilter: (req, file, cb) => {
     const allowedMimes = [
       'application/pdf',
