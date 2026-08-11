@@ -21,41 +21,35 @@ function getStripe() {
 }
 
 // Plan definitions — price IDs come from env vars (set after Stripe product creation)
+// Public checkout now supports the clean ladder only:
+// Free Preview → ElevatorIQ Decision Review → Portfolio Watch.
+// Legacy subscription plan_type values may still exist in the database for old
+// customers, but they are intentionally not exposed as checkout products here.
 const PLANS = {
   pay_per: {
     priceId: () => process.env.STRIPE_PRICE_PAY_PER,
     mode: 'payment',
-    label: 'Single Review — $99',
-    checkoutName: 'ElevatorIQ Full Analysis — Single Review',
-    checkoutDescription: 'Unlock the full ElevatorIQ report for one elevator contract, invoice, or bid: detailed findings, risk levels, negotiation questions, and downloadable PDF.',
+    label: 'ElevatorIQ Decision Review — $99',
+    checkoutName: 'ElevatorIQ Decision Review',
+    checkoutDescription: 'Unlock the full Decision Review for one elevator contract, invoice, proposal, quote, or bid: findings, document evidence, recommended next step, vendor questions, and downloadable report.',
     amount: 9900,
-  },
-  owner_plan: {
-    priceId: () => process.env.STRIPE_PRICE_OWNER_PLAN,
-    mode: 'subscription',
-    label: 'Owner Plan — $149/month',
-    checkoutName: 'ElevatorIQ Owner Plan',
-    checkoutDescription: 'Monthly access for individual property owners: up to 5 elevator document reviews per month with PDF reports and email delivery.',
-    amount: 14900,
-    interval: 'month',
-    monthlyReviewCap: 5,
   },
   manager_plan: {
     priceId: () => process.env.STRIPE_PRICE_MANAGER_PLAN,
     mode: 'subscription',
-    label: 'Manager Plan — $399/month',
-    checkoutName: 'ElevatorIQ Manager Plan',
-    checkoutDescription: 'Unlimited elevator contract, invoice, and bid reviews for property managers and portfolio operators.',
-    amount: 39900,
+    label: 'Portfolio Watch — $299/month',
+    checkoutName: 'ElevatorIQ Portfolio Watch',
+    checkoutDescription: 'Portfolio Watch includes up to 12 elevators, 10 included document reviews per month for documents tied to covered elevators, contract memory, recurring invoice and quote review, renewal-window tracking, and vendor-risk history. Additional document reviews are $49 each; additional elevators 13–50 are $25/month each.',
+    amount: 29900,
     interval: 'month',
   },
   manager_plan_annual: {
     priceId: () => process.env.STRIPE_PRICE_MANAGER_ANNUAL,
     mode: 'subscription',
-    label: 'Manager Plan Annual — $3,199/year',
-    checkoutName: 'ElevatorIQ Manager Plan — Annual',
-    checkoutDescription: 'Annual unlimited elevator contract, invoice, and bid reviews for property managers and portfolio operators.',
-    amount: 319900,
+    label: 'Portfolio Watch Annual — $2,990/year',
+    checkoutName: 'ElevatorIQ Portfolio Watch — Annual',
+    checkoutDescription: 'Annual Portfolio Watch for up to 12 elevators with 10 included document reviews per month, contract memory, recurring review, renewal-window tracking, and vendor-risk history.',
+    amount: 299000,
     interval: 'year',
   },
 };
@@ -106,7 +100,7 @@ async function getAccessLevel(email, code) {
       const planType = sub.rows[0].plan_type;
       const planDef = PLANS[planType];
 
-      // Owner Plan has a monthly review cap — check usage this calendar month
+      // Some subscription plans have monthly included-review caps.
       if (planDef && planDef.monthlyReviewCap) {
         const used = await db.query(
           `SELECT COUNT(*) as count FROM cases

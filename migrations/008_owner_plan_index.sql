@@ -1,4 +1,4 @@
--- Migration 008: Add index to support Owner Plan monthly review cap queries
+-- Migration 008: Add index to support monthly included-review cap queries
 -- The getAccessLevel function queries cases by customer_email + payment_status + created_at (month)
 -- This index makes that query fast even at scale.
 

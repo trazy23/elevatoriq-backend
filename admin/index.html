@@ -207,14 +207,14 @@
       <div class="card-title" style="margin-top:4px;">Subscriptions</div>
       <div class="sub-pair">
         <div class="sub-box">
-          <div class="sub-val" id="sub-owner">—</div>
-          <div class="sub-name">Owner Plan</div>
-          <div class="sub-price">$149/mo</div>
+          <div class="sub-val" id="sub-legacy">—</div>
+          <div class="sub-name">Legacy Plans</div>
+          <div class="sub-price">Retired subscriptions</div>
         </div>
         <div class="sub-box">
           <div class="sub-val" id="sub-manager">—</div>
-          <div class="sub-name">Manager Plan</div>
-          <div class="sub-price">$399/mo</div>
+          <div class="sub-name">Portfolio Watch</div>
+          <div class="sub-price">$299/mo base</div>
         </div>
       </div>
     </div>
@@ -440,11 +440,11 @@
     document.getElementById('kpi-paid').textContent      = fmt(s.paid_reviews);
     document.getElementById('kpi-conversion').textContent= (s.free_to_paid_conversion_rate || '0%') + ' conversion';
     document.getElementById('kpi-subs').textContent      = fmt(r.active_subscriptions);
-    document.getElementById('kpi-subs-sub').textContent  = (bd.owner_plan||0) + ' Owner · ' + (bd.manager_plan||0) + ' Manager';
+    document.getElementById('kpi-subs-sub').textContent  = (bd.legacy_plan||0) + ' Legacy · ' + (bd.manager_plan||0) + ' Portfolio Watch';
     document.getElementById('kpi-mrr').textContent       = fmtMrr(r.mrr_estimate_cents);
     document.getElementById('n-sent').textContent        = fmt(n.emails_sent_last_30d);
     document.getElementById('n-pending').textContent     = fmt(n.pending_sends);
-    document.getElementById('sub-owner').textContent     = bd.owner_plan || 0;
+    document.getElementById('sub-legacy').textContent    = bd.legacy_plan || 0;
     document.getElementById('sub-manager').textContent   = bd.manager_plan || 0;
 
     // Daily bar chart

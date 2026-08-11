@@ -164,7 +164,7 @@ function buildNurture1Html(firstName) {
           <li><strong>Use the risk flags as negotiating points.</strong> When your contract comes up for renewal, reference specific issues flagged in the report. You'll negotiate from a position of knowledge.</li>
         </ol>
         <p style="color: #555; line-height: 1.6;">
-          Have another document to review? Upload it now for just $99, or consider our Owner Plan at $149/month for unlimited reviews.
+          Have another standalone document to review? Upload it for a $99 ElevatorIQ Decision Review. Managing multiple elevators? Portfolio Watch starts at $299/month and includes document reviews tied to your portfolio.
         </p>
         <div style="text-align: center; margin: 28px 0;">
           <a href="https://elevatoriq.ai" style="background: #00B876; color: #0B0E13; padding: 12px 28px;
@@ -230,12 +230,12 @@ function buildNurture3Html(firstName) {
           If your report flagged something worth acting on, now is the time. The sooner you address findings—whether by renegotiating with your vendor or switching providers—the sooner you start saving money.
         </p>
         <p style="color: #555; line-height: 1.6;">
-          <strong>Our Owner Plan ($149/month)</strong> puts you in control. Review every new elevator document as it comes in. Never miss a renewal deadline. Never get surprised by a contract change. It's one less thing to manage.
+          <strong>Portfolio Watch starts at $299/month</strong> and turns scattered elevator documents into ongoing portfolio oversight. It includes up to 12 elevators, 10 included document reviews per month, renewal-window tracking, invoice and quote monitoring, and monthly Portfolio Briefs.
         </p>
         <div style="text-align: center; margin: 28px 0;">
           <a href="https://elevatoriq.ai" style="background: #00B876; color: #0B0E13; padding: 12px 28px;
              border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 14px;">
-            Start Your Owner Plan
+            Start Portfolio Watch
           </a>
         </div>
         <p style="font-size: 12px; color: #888; line-height: 1.5;">

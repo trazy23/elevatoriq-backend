@@ -8,12 +8,15 @@ const {
   reviewDocumentAgainstContract,
 } = require('../src/services/contractAwareService');
 
-test('calculatePortfolioWatchPrice applies marginal tiers and floor', () => {
-  assert.equal(calculatePortfolioWatchPrice(3).monthly, 300);
-  assert.equal(calculatePortfolioWatchPrice(20).monthly, 500);
-  assert.equal(calculatePortfolioWatchPrice(40).monthly, 925);
-  assert.equal(calculatePortfolioWatchPrice(100).monthly, 2000);
-  assert.equal(calculatePortfolioWatchPrice(40).annual_prepay, 9250);
+test('calculatePortfolioWatchPrice applies Portfolio Watch base and marginal tiers', () => {
+  assert.equal(calculatePortfolioWatchPrice(0).monthly, 0);
+  assert.equal(calculatePortfolioWatchPrice(3).monthly, 299);
+  assert.equal(calculatePortfolioWatchPrice(12).monthly, 299);
+  assert.equal(calculatePortfolioWatchPrice(20).monthly, 499);
+  assert.equal(calculatePortfolioWatchPrice(40).monthly, 999);
+  assert.equal(calculatePortfolioWatchPrice(50).monthly, 1249);
+  assert.equal(calculatePortfolioWatchPrice(100).monthly, 2149);
+  assert.equal(calculatePortfolioWatchPrice(50).annual_prepay, 12490);
 });
 
 test('buildFactsFromTerms confidence-gates material terms with source snippets', () => {

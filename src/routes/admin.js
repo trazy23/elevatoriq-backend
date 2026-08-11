@@ -437,7 +437,7 @@ router.get('/metrics', requireAdminKey, async (req, res) => {
       db.query(`
         SELECT
           COUNT(*) FILTER (WHERE status = 'active') AS active_subscriptions,
-          SUM(CASE WHEN plan_type = 'owner_plan' THEN 1 ELSE 0 END) FILTER (WHERE status = 'active') AS owner_plan,
+          SUM(CASE WHEN plan_type = 'owner_plan' THEN 1 ELSE 0 END) FILTER (WHERE status = 'active') AS legacy_plan,
           SUM(CASE WHEN plan_type IN ('manager_plan', 'manager_plan_annual') THEN 1 ELSE 0 END) FILTER (WHERE status = 'active') AS manager_plan
         FROM subscriptions
       `),
@@ -474,10 +474,12 @@ router.get('/metrics', requireAdminKey, async (req, res) => {
     const totalPaidReviews = summaryRow.paid_reviews || 0;
     const conversionRate = totalFreeReviews > 0 ? ((totalPaidReviews / (totalFreeReviews + totalPaidReviews)) * 100).toFixed(1) : '0';
 
-    // Calculate MRR estimate (assuming standard pricing)
-    const ownerPlan = revenueRow.owner_plan || 0;
+    // Calculate MRR estimate for current public subscription pricing. Retired
+    // subscription plan types are counted separately but excluded from the
+    // current public MRR estimate so admin metrics match the live offer ladder.
+    const legacyPlan = revenueRow.legacy_plan || 0;
     const managerPlan = revenueRow.manager_plan || 0;
-    const mrrEstimateCents = (ownerPlan * 14900) + (managerPlan * 39900); // $149 and $399 monthly
+    const mrrEstimateCents = managerPlan * 29900;
 
     // Build review types object
     const reviewTypesObj = {};
@@ -503,7 +505,7 @@ router.get('/metrics', requireAdminKey, async (req, res) => {
       revenue: {
         active_subscriptions: revenueRow.active_subscriptions || 0,
         subscription_breakdown: {
-          owner_plan: ownerPlan,
+          legacy_plan: legacyPlan,
           manager_plan: managerPlan,
         },
         mrr_estimate_cents: mrrEstimateCents,

@@ -93,17 +93,32 @@ function buildFactsFromTerms(terms = {}) {
 
 function calculatePortfolioWatchPrice(unitCount) {
   const units = Math.max(0, Number(unitCount) || 0);
-  const first = Math.min(units, 25) * 25;
-  const second = Math.min(Math.max(units - 25, 0), 50) * 20;
-  const third = Math.max(units - 75, 0) * 15;
-  const raw = first + second + third;
+  if (units === 0) {
+    return {
+      enrolled_units: 0,
+      included_units: 0,
+      monthly: 0,
+      annual_monthly_billing: 0,
+      annual_prepay: 0,
+      blended_per_unit: 0,
+      base_applied: false,
+    };
+  }
+
+  const includedUnits = 12;
+  const base = 299;
+  const firstExpansion = Math.min(Math.max(units - includedUnits, 0), 38) * 25;
+  const largePortfolioExpansion = Math.max(units - 50, 0) * 18;
+  const monthly = base + firstExpansion + largePortfolioExpansion;
+
   return {
     enrolled_units: units,
-    monthly: units > 0 ? Math.max(300, raw) : 0,
-    annual_monthly_billing: units > 0 ? Math.max(300, raw) * 12 : 0,
-    annual_prepay: units > 0 ? Math.max(300, raw) * 10 : 0,
-    blended_per_unit: units > 0 ? Math.max(300, raw) / units : 0,
-    floor_applied: units > 0 && raw < 300,
+    included_units: includedUnits,
+    monthly,
+    annual_monthly_billing: monthly * 12,
+    annual_prepay: monthly * 10,
+    blended_per_unit: monthly / units,
+    base_applied: true,
   };
 }
 
